@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Настройки — Xiaomi VLESS</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <strong>Xiaomi VLESS Panel</strong>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/servers">Серверы</a>
+      <a href="/subscriptions">Подписки</a>
+      <a href="/routing">Routing</a>
+      <a href="/settings" class="active">Настройки</a>
+      <a href="/logs">Логи</a>
+      <a href="/logout">Выход</a>
+    </nav>
+  </header>
+  <main>
+    <div id="msg" class="msg" hidden></div>
+
+    <div class="card">
+      <h2>Пути и сеть</h2>
+      <form id="settings-form">
+        <div class="field"><label class="label">Xray binary</label><input id="xray_bin"></div>
+        <div class="field"><label class="label">Xray config</label><input id="xray_config"></div>
+        <div class="field"><label class="label">Startup script</label><input id="startup_script"></div>
+        <div class="field"><label class="label">iptables script</label><input id="iptables_script"></div>
+        <div class="field"><label class="label">Guest subnet</label><input id="guest_subnet"></div>
+        <div class="field"><label class="label">Listen addr</label><input id="listen_addr"></div>
+        <div class="field"><label class="label">Xray API addr</label><input id="xray_api_addr" placeholder="127.0.0.1:10085"></div>
+        <div class="field"><label class="label">Observatory probe URL</label><input id="probe_url"></div>
+        <div class="field"><label class="label">Observatory interval</label><input id="probe_interval"></div>
+        <button type="submit">Сохранить</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>iptables / inbounds порты</h2>
+      <form id="iptables-form">
+        <div class="grid">
+          <div class="field"><label class="label">TCP REDIRECT</label><input id="tcp_port" type="number"></div>
+          <div class="field"><label class="label">UDP TProxy</label><input id="udp_port" type="number"></div>
+          <div class="field"><label class="label">SOCKS (probe)</label><input id="socks_port" type="number"></div>
+          <div class="field"><label class="label">Xray API port</label><input id="api_port" type="number"></div>
+        </div>
+        <button type="submit">Сохранить порты</button>
+        <p class="label">После смены портов нажмите Apply на Dashboard.</p>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Xray Routing</h2>
+      <p class="label">Split-tunnel: geosite/geoip, direct / proxy / block, порядок правил и preview цепочки.</p>
+      <a href="/routing"><button type="button">Открыть редактор routing →</button></a>
+    </div>
+
+    <div class="card">
+      <h2>Подписки — автообновление</h2>
+      <form id="subs-policy-form">
+        <label><input type="checkbox" id="subs_auto_refresh"> Автообновление по расписанию</label>
+        <div class="field"><label class="label">Интервал (минут)</label><input id="subs_interval" type="number" min="5" value="60"></div>
+        <div class="field">
+          <label class="label">При смене серверов в подписке</label>
+          <select id="subs_reselect">
+            <option value="best_ping">Выбрать с лучшим пингом (TCP)</option>
+            <option value="first">Выбрать первый в списке</option>
+            <option value="keep">Оставить текущий (если есть)</option>
+          </select>
+        </div>
+        <label><input type="checkbox" id="subs_auto_apply" checked> Автоматически Apply после обновления</label>
+        <button type="submit">Сохранить</button>
+        <p class="label" id="subs-last-refresh"></p>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Watchdog</h2>
+      <form id="watchdog-form">
+        <label><input type="checkbox" id="watchdog_enabled"> Включён</label>
+        <div class="field"><label class="label">Интервал (сек)</label><input id="watchdog_interval" type="number" min="15"></div>
+        <label><input type="checkbox" id="watchdog_refresh"> Обновлять подписки при outage</label>
+        <div class="field"><label class="label">Telegram bot token</label><input id="tg_token" type="password" autocomplete="off"></div>
+        <div class="field"><label class="label">Telegram chat id</label><input id="tg_chat"></div>
+        <button type="submit">Сохранить watchdog</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Логи (пути)</h2>
+      <form id="logs-form">
+        <div class="field"><label class="label">Startup log</label><input id="log_startup"></div>
+        <div class="field"><label class="label">Panel log</label><input id="log_panel"></div>
+        <div class="field"><label class="label">Xray access</label><input id="log_access"></div>
+        <div class="field"><label class="label">Xray error</label><input id="log_error"></div>
+        <button type="submit">Сохранить пути логов</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Обновление panel</h2>
+      <p class="label">Безопасное обновление с GitHub Releases. При ошибке доступен откат на предыдущую версию.</p>
+      <div id="update-info">
+        <p><span class="label">Текущая версия:</span> <strong id="upd-current">—</strong></p>
+        <p><span class="label">Доступная:</span> <strong id="upd-available">—</strong></p>
+        <p><span class="label">Статус:</span> <span id="upd-phase">—</span></p>
+        <div id="upd-progress-wrap" hidden>
+          <div class="label">Прогресс</div>
+          <progress id="upd-progress" max="100" value="0"></progress>
+          <span id="upd-progress-text"></span>
+        </div>
+        <p id="upd-error" class="msg error" hidden></p>
+      </div>
+      <div style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap">
+        <button type="button" id="btn-upd-check">Проверить обновления</button>
+        <button type="button" id="btn-upd-download" class="secondary" disabled>Скачать</button>
+        <button type="button" id="btn-upd-apply" disabled>Обновить</button>
+        <button type="button" id="btn-upd-cancel" class="secondary" disabled>Отмена</button>
+        <button type="button" id="btn-upd-rollback" class="secondary" disabled>Откатить</button>
+        <button type="button" id="btn-upd-confirm" class="secondary" hidden>Подтвердить</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Backup / Restore</h2>
+      <button id="btn-backup">Скачать backup</button>
+      <div class="field" style="margin-top:1rem">
+        <label class="label">Восстановить из JSON</label>
+        <input id="restore-file" type="file" accept="application/json,.json">
+        <button id="btn-restore" class="secondary">Восстановить</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Смена пароля</h2>
+      <form id="password-form">
+        <div class="field"><label class="label">Текущий пароль</label><input id="current_password" type="password"></div>
+        <div class="field"><label class="label">Новый логин</label><input id="new_username"></div>
+        <div class="field"><label class="label">Новый пароль</label><input id="new_password" type="password"></div>
+        <button type="submit">Обновить пароль</button>
+      </form>
+    </div>
+  </main>
+  <script src="/static/app.js"></script>
+  <script>
+    let cachedSettings = null;
+
+    async function loadSettings() {
+      const s = await API.get('/api/settings');
+      cachedSettings = s;
+      document.getElementById('xray_bin').value = s.paths?.xray_bin || '';
+      document.getElementById('xray_config').value = s.paths?.xray_config || '';
+      document.getElementById('startup_script').value = s.paths?.startup_script || '';
+      document.getElementById('iptables_script').value = s.paths?.iptables_script || '';
+      document.getElementById('guest_subnet').value = s.iptables?.guest_subnet || s.network?.guest_subnet || '';
+      document.getElementById('listen_addr').value = s.network?.listen_addr || '';
+      document.getElementById('xray_api_addr').value = s.network?.xray_api_addr || '127.0.0.1:10085';
+      document.getElementById('probe_url').value = s.observatory?.probe_url || '';
+      document.getElementById('probe_interval').value = s.observatory?.probe_interval || '';
+      document.getElementById('tcp_port').value = s.iptables?.tcp_port || 12346;
+      document.getElementById('udp_port').value = s.iptables?.udp_port || 12345;
+      document.getElementById('socks_port').value = s.iptables?.socks_port || 10808;
+      document.getElementById('api_port').value = s.iptables?.api_port || 10085;
+      document.getElementById('watchdog_enabled').checked = s.watchdog?.enabled !== false;
+      document.getElementById('watchdog_interval').value = s.watchdog?.interval_sec || 60;
+      document.getElementById('watchdog_refresh').checked = s.watchdog?.refresh_subscriptions_on_outage !== false;
+      document.getElementById('subs_auto_refresh').checked = s.subscriptions_policy?.auto_refresh_enabled !== false;
+      document.getElementById('subs_interval').value = s.subscriptions_policy?.auto_refresh_interval_min || 60;
+      document.getElementById('subs_reselect').value = s.subscriptions_policy?.reselect_strategy || 'best_ping';
+      document.getElementById('subs_auto_apply').checked = s.subscriptions_policy?.auto_apply_on_change !== false;
+      const last = s.subscriptions_policy?.last_auto_refresh_at;
+      document.getElementById('subs-last-refresh').textContent = last
+        ? 'Последнее автообновление: ' + new Date(last).toLocaleString()
+        : 'Автообновление ещё не выполнялось';
+      document.getElementById('tg_token').value = s.watchdog?.telegram_bot_token || '';
+      document.getElementById('tg_chat').value = s.watchdog?.telegram_chat_id || '';
+      document.getElementById('log_startup').value = s.logs?.startup_log || '';
+      document.getElementById('log_panel').value = s.logs?.panel_log || '';
+      document.getElementById('log_access').value = s.logs?.xray_access_log || '';
+      document.getElementById('log_error').value = s.logs?.xray_error_log || '';
+      document.getElementById('new_username').value = s.auth?.username || '';
+    }
+
+    function buildPayload(extra = {}) {
+      const s = cachedSettings || {};
+      return {
+        paths: {
+          xray_bin: document.getElementById('xray_bin').value,
+          xray_config: document.getElementById('xray_config').value,
+          startup_script: document.getElementById('startup_script').value,
+          iptables_script: document.getElementById('iptables_script').value,
+          panel_data_dir: s.paths?.panel_data_dir || '/mnt/usb-ed49605f/xiaomi-vless',
+        },
+        network: {
+          guest_subnet: document.getElementById('guest_subnet').value,
+          listen_addr: document.getElementById('listen_addr').value,
+          xray_api_addr: document.getElementById('xray_api_addr').value,
+        },
+        iptables: {
+          guest_subnet: document.getElementById('guest_subnet').value,
+          tcp_port: parseInt(document.getElementById('tcp_port').value, 10) || 12346,
+          udp_port: parseInt(document.getElementById('udp_port').value, 10) || 12345,
+          socks_port: parseInt(document.getElementById('socks_port').value, 10) || 10808,
+          api_port: parseInt(document.getElementById('api_port').value, 10) || 10085,
+        },
+        observatory: {
+          enabled: s.observatory?.enabled !== false,
+          probe_url: document.getElementById('probe_url').value,
+          probe_interval: document.getElementById('probe_interval').value,
+        },
+        watchdog: {
+          enabled: document.getElementById('watchdog_enabled').checked,
+          interval_sec: parseInt(document.getElementById('watchdog_interval').value, 10) || 60,
+          refresh_subscriptions_on_outage: document.getElementById('watchdog_refresh').checked,
+          telegram_bot_token: document.getElementById('tg_token').value,
+          telegram_chat_id: document.getElementById('tg_chat').value,
+          last_alert: s.watchdog?.last_alert || '',
+        },
+        subscriptions_policy: {
+          auto_refresh_enabled: document.getElementById('subs_auto_refresh').checked,
+          auto_refresh_interval_min: parseInt(document.getElementById('subs_interval').value, 10) || 60,
+          reselect_strategy: document.getElementById('subs_reselect').value,
+          auto_apply_on_change: document.getElementById('subs_auto_apply').checked,
+          last_auto_refresh_at: s.subscriptions_policy?.last_auto_refresh_at || null,
+        },
+        logs: {
+          startup_log: document.getElementById('log_startup').value,
+          panel_log: document.getElementById('log_panel').value,
+          xray_access_log: document.getElementById('log_access').value,
+          xray_error_log: document.getElementById('log_error').value,
+        },
+        routing: s.routing || {},
+        ...extra,
+      };
+    }
+
+    async function saveSettings() {
+      await API.send('PUT', '/api/settings', buildPayload());
+      showMsg(document.getElementById('msg'), 'Настройки сохранены', true);
+      await loadSettings();
+    }
+
+    document.getElementById('settings-form').onsubmit = async (e) => {
+      e.preventDefault();
+      try { await saveSettings(); } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+    };
+    document.getElementById('iptables-form').onsubmit = async (e) => {
+      e.preventDefault();
+      try { await saveSettings(); } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+    };
+    document.getElementById('watchdog-form').onsubmit = async (e) => {
+      e.preventDefault();
+      try { await saveSettings(); } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+    };
+    document.getElementById('subs-policy-form').onsubmit = async (e) => {
+      e.preventDefault();
+      try { await saveSettings(); } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+    };
+    document.getElementById('logs-form').onsubmit = async (e) => {
+      e.preventDefault();
+      try { await saveSettings(); } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+    };
+
+    document.getElementById('btn-backup').onclick = () => { window.location.href = '/api/backup'; };
+
+    document.getElementById('btn-restore').onclick = async () => {
+      const file = document.getElementById('restore-file').files[0];
+      if (!file) { showMsg(document.getElementById('msg'), 'Выберите файл'); return; }
+      if (!confirm('Восстановить конфигурацию? Текущие настройки будут заменены.')) return;
+      try {
+        const text = await file.text();
+        const r = await fetch('/api/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: text });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || r.statusText);
+        showMsg(document.getElementById('msg'), 'Backup восстановлен', true);
+        await loadSettings();
+      } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+    };
+
+    document.getElementById('password-form').onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await API.send('PUT', '/api/auth/password', {
+          current_password: document.getElementById('current_password').value,
+          username: document.getElementById('new_username').value,
+          password: document.getElementById('new_password').value,
+        });
+        showMsg(document.getElementById('msg'), 'Пароль обновлён', true);
+      } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+    };
+
+    loadSettings().catch(e => showMsg(document.getElementById('msg'), e.message));
+
+    let updatePoll = null;
+    let lastAvailable = null;
+
+    function phaseLabel(phase) {
+      const map = {
+        idle: 'Готово',
+        checking: 'Проверка…',
+        downloading: 'Скачивание…',
+        extracting: 'Распаковка…',
+        verified: 'Готово к установке',
+        applying: 'Установка…',
+        restarting: 'Перезапуск…',
+        health_check: 'Проверка после обновления…',
+        completed: 'Обновление завершено',
+        failed: 'Ошибка',
+        rolled_back: 'Откат выполнен',
+      };
+      return map[phase] || phase;
+    }
+
+    function renderUpdate(st) {
+      document.getElementById('upd-current').textContent = (st.current_version || 'dev') + (st.current_commit ? ' (' + st.current_commit + ')' : '');
+      const avail = st.available?.version || lastAvailable?.version || '—';
+      document.getElementById('upd-available').textContent = avail;
+      document.getElementById('upd-phase').textContent = phaseLabel(st.phase);
+      const errEl = document.getElementById('upd-error');
+      if (st.error) {
+        errEl.hidden = false;
+        errEl.textContent = st.error;
+      } else {
+        errEl.hidden = true;
+      }
+      const wrap = document.getElementById('upd-progress-wrap');
+      if (st.progress > 0 && st.progress < 100) {
+        wrap.hidden = false;
+        document.getElementById('upd-progress').value = st.progress;
+        document.getElementById('upd-progress-text').textContent = Math.round(st.progress) + '%';
+      } else {
+        wrap.hidden = true;
+      }
+      document.getElementById('btn-upd-download').disabled = !(st.can_download && avail !== '—' && avail !== st.current_version);
+      document.getElementById('btn-upd-apply').disabled = !st.can_apply;
+      document.getElementById('btn-upd-cancel').disabled = !['checking','downloading','extracting','verified'].includes(st.phase);
+      document.getElementById('btn-upd-rollback').disabled = !st.can_rollback;
+      document.getElementById('btn-upd-confirm').hidden = st.phase !== 'health_check';
+      if (st.phase === 'downloading' || st.phase === 'applying' || st.phase === 'restarting' || st.phase === 'health_check') {
+        if (!updatePoll) updatePoll = setInterval(refreshUpdate, 2000);
+      } else if (updatePoll) {
+        clearInterval(updatePoll);
+        updatePoll = null;
+      }
+    }
+
+    async function refreshUpdate() {
+      const st = await API.get('/api/update/status');
+      renderUpdate(st);
+      return st;
+    }
+
+    document.getElementById('btn-upd-check').onclick = async () => {
+      try {
+        const st = await API.get('/api/update/check');
+        if (st.available) lastAvailable = st.available;
+        renderUpdate(st);
+        showMsg(document.getElementById('msg'), st.available ? 'Доступна версия ' + st.available.version : 'Обновлений нет', true);
+      } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+    };
+
+    document.getElementById('btn-upd-download').onclick = async () => {
+      try {
+        const st = await API.send('POST', '/api/update/download', {});
+        renderUpdate(st);
+        showMsg(document.getElementById('msg'), 'Загрузка завершена', true);
+      } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+    };
+
+    document.getElementById('btn-upd-apply').onclick = async () => {
+      if (!confirm('Установить обновление? Панель перезапустится.')) return;
+      try {
+        await API.send('POST', '/api/update/apply', {});
+        showMsg(document.getElementById('msg'), 'Обновление запущено — страница перезагрузится', true);
+        setTimeout(() => location.reload(), 5000);
+      } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+    };
+
+    document.getElementById('btn-upd-cancel').onclick = async () => {
+      try {
+        const st = await API.send('POST', '/api/update/cancel', {});
+        renderUpdate(st);
+        showMsg(document.getElementById('msg'), 'Обновление отменено', true);
+      } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+    };
+
+    document.getElementById('btn-upd-rollback').onclick = async () => {
+      if (!confirm('Откатить panel на предыдущую версию?')) return;
+      try {
+        const st = await API.send('POST', '/api/update/rollback', {});
+        renderUpdate(st);
+        showMsg(document.getElementById('msg'), 'Откат выполнен', true);
+        setTimeout(() => location.reload(), 3000);
+      } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+    };
+
+    document.getElementById('btn-upd-confirm').onclick = async () => {
+      try {
+        const st = await API.send('POST', '/api/update/confirm', {});
+        renderUpdate(st);
+        showMsg(document.getElementById('msg'), 'Обновление подтверждено', true);
+      } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+    };
+
+    refreshUpdate().catch(() => {});
+  </script>
+</body>
+</html>

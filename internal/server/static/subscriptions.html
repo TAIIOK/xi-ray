@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Подписки — Xiaomi VLESS</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <strong>Xiaomi VLESS Panel</strong>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/servers">Серверы</a>
+      <a href="/subscriptions" class="active">Подписки</a>
+      <a href="/routing">Routing</a>
+      <a href="/settings">Настройки</a>
+      <a href="/logs">Логи</a>
+      <a href="/logout">Выход</a>
+    </nav>
+  </header>
+  <main>
+    <div id="msg" class="msg" hidden></div>
+
+    <div class="card">
+      <h2>Добавить подписку</h2>
+      <div class="field">
+        <label class="label">Название</label>
+        <input id="sub-name" placeholder="My subscription">
+      </div>
+      <div class="field">
+        <label class="label">URL подписки</label>
+        <input id="sub-url" placeholder="https://...">
+      </div>
+      <button id="btn-add-sub">Добавить и загрузить</button>
+    </div>
+
+    <div class="card">
+      <h2>Подписки</h2>
+      <p class="label" id="policy-hint"></p>
+      <table>
+        <thead>
+          <tr><th>Название</th><th>Обновлено</th><th></th></tr>
+        </thead>
+        <tbody id="subs-body"></tbody>
+      </table>
+    </div>
+  </main>
+  <script src="/static/app.js"></script>
+  <script>
+    async function loadSubs() {
+      const [data, settings] = await Promise.all([
+        API.get('/api/subscriptions-list'),
+        API.get('/api/settings'),
+      ]);
+      const list = data.subscriptions || [];
+      const pol = settings.subscriptions_policy || {};
+      const hint = document.getElementById('policy-hint');
+      if (hint) {
+        const strat = { best_ping: 'лучший пинг', first: 'первый', keep: 'оставить текущий' }[pol.reselect_strategy] || pol.reselect_strategy;
+        hint.textContent = pol.auto_refresh_enabled
+          ? `Автообновление каждые ${pol.auto_refresh_interval_min || 60} мин · стратегия: ${strat}`
+          : 'Автообновление выключено — см. Настройки';
+      }
+      const tbody = document.getElementById('subs-body');
+      tbody.innerHTML = '';
+      list.forEach(s => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${escapeHtml(s.name)}</td>
+          <td>${s.updated_at ? new Date(s.updated_at).toLocaleString() : '—'}</td>
+          <td>
+            <button data-refresh="${s.id}" class="secondary">Обновить</button>
+            <button data-del="${s.id}" class="danger">Удалить</button>
+          </td>`;
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('[data-refresh]').forEach(btn => {
+        btn.onclick = async () => {
+          try {
+            const res = await API.send('POST', '/api/subscriptions/' + btn.dataset.refresh + '/refresh');
+            let msg = 'Загружено серверов: ' + (res.nodes?.length || 0);
+            if (res.selection_changed) msg += ' · выбран новый сервер';
+            if (res.apply) msg += res.apply.ok ? ' · Apply OK' : ' · Apply: ' + res.apply.message;
+            showMsg(document.getElementById('msg'), msg, !res.apply || res.apply.ok);
+            await loadSubs();
+          } catch (e) { showMsg(document.getElementById('msg'), e.message); }
+        };
+      });
+      tbody.querySelectorAll('[data-del]').forEach(btn => {
+        btn.onclick = async () => {
+          if (!confirm('Удалить подписку и её серверы?')) return;
+          await API.send('DELETE', '/api/subscriptions/' + btn.dataset.del);
+          showMsg(document.getElementById('msg'), 'Удалено', true);
+          await loadSubs();
+        };
+      });
+    }
+
+    function escapeHtml(s) {
+      return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    document.getElementById('btn-add-sub').onclick = async () => {
+      try {
+        const name = document.getElementById('sub-name').value.trim() || 'Subscription';
+        const url = document.getElementById('sub-url').value.trim();
+        if (!url) throw new Error('URL обязателен');
+        const res = await API.send('POST', '/api/subscriptions', { name, url });
+        showMsg(document.getElementById('msg'), 'Добавлено серверов: ' + (res.nodes?.length || 0), true);
+        document.getElementById('sub-url').value = '';
+        await loadSubs();
+      } catch (e) { showMsg(document.getElementById('msg'), e.message); }
+    };
+
+    loadSubs().catch(e => showMsg(document.getElementById('msg'), e.message));
+  </script>
+</body>
+</html>

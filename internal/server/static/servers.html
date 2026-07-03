@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Серверы — Xiaomi VLESS</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <strong>Xiaomi VLESS Panel</strong>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/servers" class="active">Серверы</a>
+      <a href="/subscriptions">Подписки</a>
+      <a href="/routing">Routing</a>
+      <a href="/settings">Настройки</a>
+      <a href="/logs">Логи</a>
+      <a href="/logout">Выход</a>
+    </nav>
+  </header>
+  <main>
+    <div id="msg" class="msg" hidden></div>
+
+    <div class="card">
+      <h2>Режим выбора</h2>
+      <div class="field">
+        <label><input type="radio" name="mode" value="single" checked> Один сервер</label>
+        <label style="margin-left:1rem"><input type="radio" name="mode" value="multi"> Несколько + failover</label>
+      </div>
+      <div class="field">
+        <label><input type="checkbox" id="apply-immediately" checked> Применить сразу (config + iptables + restart)</label>
+      </div>
+      <button id="btn-save-selection">Сохранить и применить</button>
+      <button id="btn-save-only" class="secondary">Только сохранить</button>
+      <button id="btn-probe" class="secondary">Обновить health</button>
+    </div>
+
+    <div class="card">
+      <h2>Добавить VLESS вручную</h2>
+      <div class="field">
+        <textarea id="manual-link" rows="3" placeholder="vless://..."></textarea>
+      </div>
+      <button id="btn-add-manual">Добавить</button>
+    </div>
+
+    <div class="card">
+      <h2>Список серверов</h2>
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Имя</th>
+            <th>Адрес</th>
+            <th>Security</th>
+            <th>Health</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="nodes-body"></tbody>
+      </table>
+    </div>
+  </main>
+  <script src="/static/app.js"></script>
+  <script>
+    let nodes = [];
+    let selection = { mode: 'single', active_node_ids: [], fallback_order: [] };
+
+    function renderNodes() {
+      const tbody = document.getElementById('nodes-body');
+      tbody.innerHTML = '';
+      const active = new Set(selection.active_node_ids || []);
+      nodes.forEach(n => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><input type="checkbox" data-id="${n.id}" ${active.has(n.id) ? 'checked' : ''}></td>
+          <td>${escapeHtml(n.name)}</td>
+          <td>${escapeHtml(n.address)}:${n.port}</td>
+          <td>${escapeHtml(n.security)} / ${escapeHtml(n.network)}</td>
+          <td class="${healthClass(n.last_health)}">${n.last_health || 'unknown'}${n.last_latency_ms ? ' ('+n.last_latency_ms+'ms)' : ''}</td>
+          <td><button class="danger" data-del="${n.id}">×</button></td>`;
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('[data-del]').forEach(btn => {
+        btn.onclick = async () => {
+          if (!confirm('Удалить сервер?')) return;
+          await API.send('DELETE', '/api/nodes/' + btn.dataset.del);
+          await loadNodes();
+        };
+      });
+      document.querySelectorAll('input[name=mode]').forEach(r => {
+        r.checked = r.value === (selection.mode || 'single');
+      });
+    }
+
+    function escapeHtml(s) {
+      return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    async function loadNodes() {
+      const data = await API.get('/api/nodes');
+      nodes = data.nodes || [];
+      selection = data.selection || selection;
+      renderNodes();
+    }
+
+    function selectedIDs() {
+      return [...document.querySelectorAll('#nodes-body input[type=checkbox]:checked')].map(el => el.dataset.id);
+    }
+
+    async function saveSelection(apply) {
+      const mode = document.querySelector('input[name=mode]:checked').value;
+      const ids = selectedIDs();
+      if (!ids.length) throw new Error('Выберите хотя бы один сервер');
+      const res = await API.send('PUT', '/api/selection', {
+        mode,
+        active_node_ids: ids,
+        fallback_order: ids,
+        apply,
+      });
+      return res;
+    }
+
+    document.getElementById('btn-save-selection').onclick = async () => {
+      try {
+        const apply = document.getElementById('apply-immediately').checked;
+        const res = await saveSelection(apply);
+        showMsg(document.getElementById('msg'), res.message, res.ok);
+        await loadNodes();
+      } catch (e) { showMsg(document.getElementById('msg'), e.message); }
+    };
+
+    document.getElementById('btn-save-only').onclick = async () => {
+      try {
+        const res = await saveSelection(false);
+        showMsg(document.getElementById('msg'), res.message, res.ok);
+        await loadNodes();
+      } catch (e) { showMsg(document.getElementById('msg'), e.message); }
+    };
+
+    document.getElementById('btn-probe').onclick = async () => {
+      try {
+        const obs = await API.send('POST', '/api/nodes/probe', { node_ids: selectedIDs() });
+        showMsg(document.getElementById('msg'), 'Health обновлён', true);
+        await loadNodes();
+        if (obs.nodes?.length) renderNodes();
+      } catch (e) { showMsg(document.getElementById('msg'), e.message); }
+    };
+
+    document.getElementById('btn-add-manual').onclick = async () => {
+      try {
+        const link = document.getElementById('manual-link').value.trim();
+        if (!link) throw new Error('Вставьте vless:// ссылку');
+        await API.send('POST', '/api/nodes/manual', { link });
+        document.getElementById('manual-link').value = '';
+        showMsg(document.getElementById('msg'), 'Сервер добавлен', true);
+        await loadNodes();
+      } catch (e) { showMsg(document.getElementById('msg'), e.message); }
+    };
+
+    loadNodes().catch(e => showMsg(document.getElementById('msg'), e.message));
+  </script>
+</body>
+</html>

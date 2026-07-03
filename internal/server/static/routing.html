@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Routing — Xiaomi VLESS</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="page-routing">
+  <header>
+    <strong>Xiaomi VLESS Panel</strong>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/servers">Серверы</a>
+      <a href="/subscriptions">Подписки</a>
+      <a href="/routing" class="active">Routing</a>
+      <a href="/settings">Настройки</a>
+      <a href="/logs">Логи</a>
+      <a href="/logout">Выход</a>
+    </nav>
+  </header>
+  <main>
+    <div id="msg" class="msg" hidden></div>
+
+    <div class="routing-layout">
+      <section class="routing-main">
+        <div class="card">
+          <h2>Общие параметры</h2>
+          <p id="meta-info" class="label">—</p>
+          <div class="grid">
+            <div class="field">
+              <label class="label">Domain strategy</label>
+              <select id="domain_strategy">
+                <option value="IPIfNonMatch">IPIfNonMatch — резолв IP если домен не совпал</option>
+                <option value="AsIs">AsIs — без доп. резолва</option>
+                <option value="IpOnDemand">IpOnDemand — резолв по требованию</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="label">По умолчанию для гостевой Wi‑Fi</label>
+              <select id="default_guest">
+                <option value="proxy">Прокси (VPN)</option>
+                <option value="direct">Напрямую</option>
+                <option value="block">Блокировать</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Порядок групп правил</h2>
+          <p class="label">Xray проверяет правила сверху вниз. Сначала обрабатывается выбранная группа 1, затем 2, затем 3. Первое совпадение останавливает проверку.</p>
+          <div class="grid order-grid">
+            <div class="field"><label class="label">1-я группа</label><select id="order_1"><option value="direct">direct</option><option value="proxy">proxy</option><option value="block">block</option></select></div>
+            <div class="field"><label class="label">2-я группа</label><select id="order_2"><option value="direct">direct</option><option value="proxy">proxy</option><option value="block">block</option></select></div>
+            <div class="field"><label class="label">3-я группа</label><select id="order_3"><option value="direct">direct</option><option value="proxy">proxy</option><option value="block">block</option></select></div>
+          </div>
+          <div id="pipeline" class="pipeline"></div>
+        </div>
+
+        <div class="card">
+          <h2>Системные bypass</h2>
+          <p class="label">Всегда в начале цепочки (до пользовательских правил).</p>
+          <label><input type="checkbox" id="bypass_private" checked> <code>geoip:private</code> → direct (LAN, RFC1918)</label><br>
+          <label><input type="checkbox" id="bypass_vpn_hosts" checked> Адреса активных VPN-серверов → direct</label>
+        </div>
+
+        <div class="card">
+          <div class="rules-head">
+            <h2>Пользовательские правила <span id="rules-count" class="badge">0</span></h2>
+            <div class="rules-toolbar">
+              <label class="label">Фильтр</label>
+              <select id="filter-action">
+                <option value="all">Все</option>
+                <option value="direct">direct</option>
+                <option value="proxy">proxy</option>
+                <option value="block">block</option>
+              </select>
+              <button type="button" id="btn-add-rule">+ Правило</button>
+            </div>
+          </div>
+          <div id="rules-list" class="rules-list"></div>
+        </div>
+
+        <div class="card actions-bar">
+          <button type="button" id="btn-save">Сохранить</button>
+          <button type="button" id="btn-save-apply">Сохранить и Apply</button>
+          <button type="button" id="btn-preview" class="secondary">Обновить preview</button>
+        </div>
+      </section>
+
+      <aside class="routing-aside">
+        <div class="card">
+          <h2>Шаблоны</h2>
+          <p class="label">Заменяют текущие правила и базовые настройки routing.</p>
+          <button type="button" class="secondary template-btn" data-template="vpn-all">VPN для всего</button>
+          <button type="button" class="secondary template-btn" data-template="split-cn-ru">CN/RU direct, остальное VPN</button>
+          <button type="button" class="secondary template-btn" data-template="split-with-ads-block">CN direct + block ads + VPN</button>
+        </div>
+
+        <div class="card">
+          <h2>Быстрые правила</h2>
+          <div class="preset-grid">
+            <button type="button" class="secondary" data-preset="direct-geosite-cn">geosite:cn → direct</button>
+            <button type="button" class="secondary" data-preset="direct-geoip-ru">geoip:ru → direct</button>
+            <button type="button" class="secondary" data-preset="direct-geoip-cn">geoip:cn → direct</button>
+            <button type="button" class="secondary" data-preset="proxy-geosite-google">geosite:google → proxy</button>
+            <button type="button" class="secondary" data-preset="proxy-geosite-youtube">geosite:youtube → proxy</button>
+            <button type="button" class="secondary" data-preset="proxy-geosite-telegram">geosite:telegram → proxy</button>
+            <button type="button" class="secondary" data-preset="block-ads">geosite:category-ads-all → block</button>
+            <button type="button" class="secondary" data-preset="block-tracking">geosite:category-ads → block</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Справка по matchers</h2>
+          <ul class="help-list label">
+            <li><code>geosite:cn</code> — списки доменов v2fly</li>
+            <li><code>geoip:ru</code> — IP-диапазоны по стране</li>
+            <li><code>domain:example.com</code> — домен и поддомены</li>
+            <li><code>full:www.example.com</code> — точное совпадение</li>
+            <li><code>regexp:.*\\.ads\\.</code> — regex</li>
+            <li><code>192.168.0.0/16</code> — CIDR</li>
+          </ul>
+          <p class="label">Нужны файлы <code>geoip.dat</code> / <code>geosite.dat</code> рядом с Xray.</p>
+        </div>
+
+        <div class="card">
+          <h2>Preview цепочки</h2>
+          <p id="preview-note" class="label">Итоговый порядок правил в config.json</p>
+          <div class="preview-wrap">
+            <table class="preview-table">
+              <thead>
+                <tr><th>#</th><th>Тип</th><th>Имя</th><th>Action</th><th>Matchers</th><th>Outbound</th><th>Inbound</th></tr>
+              </thead>
+              <tbody id="preview-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+  <script src="/static/app.js"></script>
+  <script src="/static/routing.js"></script>
+</body>
+</html>

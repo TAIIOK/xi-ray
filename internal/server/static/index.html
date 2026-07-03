@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard — Xiaomi VLESS</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <strong>Xiaomi VLESS Panel</strong>
+    <nav>
+      <a href="/" class="active">Dashboard</a>
+      <a href="/servers">Серверы</a>
+      <a href="/subscriptions">Подписки</a>
+      <a href="/routing">Routing</a>
+      <a href="/settings">Настройки</a>
+      <a href="/logs">Логи</a>
+      <a href="/logout">Выход</a>
+    </nav>
+  </header>
+  <main>
+    <div id="msg" class="msg" hidden></div>
+    <div id="watchdog-alert" class="msg error" hidden></div>
+    <div class="grid">
+      <div class="card">
+        <div class="label">Статус</div>
+        <div id="state" class="value">—</div>
+      </div>
+      <div class="card">
+        <div class="label">Exit IP</div>
+        <div id="exit-ip" class="value">—</div>
+      </div>
+      <div class="card">
+        <div class="label">Latency</div>
+        <div id="latency" class="value">—</div>
+      </div>
+      <div class="card">
+        <div class="label">Активный outbound</div>
+        <div id="active-outbound" class="value">—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Observatory <span id="obs-live" class="label"></span></h2>
+      <table>
+        <thead>
+          <tr><th>Сервер</th><th>Tag</th><th>Health</th><th>Delay</th><th>Source</th></tr>
+        </thead>
+        <tbody id="obs-body"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Трафик гостевой сети</h2>
+      <div class="grid">
+        <div>
+          <div class="label">TCP REDIRECT</div>
+          <div id="tcp-pkts" class="value">—</div>
+          <div id="tcp-bytes" class="label"></div>
+        </div>
+        <div>
+          <div class="label">UDP TProxy</div>
+          <div id="udp-pkts" class="value">—</div>
+          <div id="udp-bytes" class="label"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <button id="btn-refresh">Обновить</button>
+      <button id="btn-restart" class="secondary">Restart Xray</button>
+      <button id="btn-apply">Apply config</button>
+    </div>
+  </main>
+  <script src="/static/app.js"></script>
+  <script>
+    function renderObservatory(obs, vpnConnected) {
+      const liveLabel = obs.live
+        ? '(live from Xray API)'
+        : (vpnConnected ? '(SOCKS probe — нажмите Apply для Observatory API)' : '(cache / offline)');
+      document.getElementById('obs-live').textContent = liveLabel;
+      const tbody = document.getElementById('obs-body');
+      tbody.innerHTML = '';
+      (obs.nodes || []).forEach(n => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${escapeHtml(n.name)}</td>
+          <td><code>${escapeHtml(n.tag)}</code></td>
+          <td class="${healthClass(n.health)}">${escapeHtml(n.health)}${n.last_error ? ' — ' + escapeHtml(n.last_error) : ''}</td>
+          <td>${n.latency_ms ? n.latency_ms + ' ms' : '—'}</td>
+          <td>${escapeHtml(n.source || '—')}</td>`;
+        tbody.appendChild(tr);
+      });
+      if (!(obs.nodes || []).length) {
+        tbody.innerHTML = '<tr><td colspan="5">Нет активных серверов</td></tr>';
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function fmtChainStats(chain) {
+      if (!chain || !chain.available) {
+        return { pkts: '—', hint: 'iptables не применён — нажмите Apply' };
+      }
+      const hint = chain.packets === 0 ? 'нет трафика с guest Wi‑Fi' : '';
+      return { pkts: String(chain.packets), hint: hint || fmtBytes(chain.bytes) };
+    }
+
+    async function loadStatus() {
+      const s = await API.get('/api/status');
+      const el = document.getElementById('state');
+      el.textContent = s.state;
+      el.className = 'value ' + stateClass(s.state);
+      document.getElementById('exit-ip').textContent = s.exit_ip || '—';
+      document.getElementById('latency').textContent = s.probe_latency_ms ? s.probe_latency_ms + ' ms' : '—';
+      document.getElementById('active-outbound').textContent = s.active_outbound || '—';
+      const tcp = fmtChainStats(s.iptables_tcp);
+      const udp = fmtChainStats(s.iptables_udp);
+      document.getElementById('tcp-pkts').textContent = tcp.pkts;
+      document.getElementById('tcp-bytes').textContent = tcp.hint;
+      document.getElementById('udp-pkts').textContent = udp.pkts;
+      document.getElementById('udp-bytes').textContent = udp.hint;
+      renderObservatory(s.observatory || { nodes: [] }, s.vpn_connected);
+      const alertEl = document.getElementById('watchdog-alert');
+      if (s.watchdog_alert) {
+        alertEl.textContent = 'Watchdog: ' + s.watchdog_alert;
+        alertEl.hidden = false;
+      } else {
+        alertEl.hidden = true;
+      }
+      if (s.message) showMsg(document.getElementById('msg'), s.message, s.state === 'running');
+    }
+
+    document.getElementById('btn-refresh').onclick = () => loadStatus().catch(e => showMsg(document.getElementById('msg'), e.message));
+    document.getElementById('btn-restart').onclick = async () => {
+      try {
+        await API.send('POST', '/api/restart');
+        showMsg(document.getElementById('msg'), 'Xray перезапущен', true);
+        await loadStatus();
+      } catch (e) { showMsg(document.getElementById('msg'), e.message); }
+    };
+    document.getElementById('btn-apply').onclick = async () => {
+      try {
+        const res = await API.send('POST', '/api/apply');
+        showMsg(document.getElementById('msg'), res.message, res.ok);
+        await loadStatus();
+      } catch (e) { showMsg(document.getElementById('msg'), e.message); }
+    };
+
+    loadStatus().catch(e => showMsg(document.getElementById('msg'), e.message));
+    setInterval(() => loadStatus().catch(() => {}), 15000);
+
+    API.get('/api/update/status').then(st => {
+      const footer = document.createElement('footer');
+      footer.style.cssText = 'margin:2rem 0 1rem;text-align:center;opacity:0.7;font-size:0.85rem';
+      footer.textContent = 'panel ' + (st.current_version || 'dev');
+      if (st.phase && st.phase !== 'idle' && st.phase !== 'completed') {
+        footer.textContent += ' — обновление: ' + st.phase;
+      }
+      document.body.appendChild(footer);
+    }).catch(() => {});
+  </script>
+</body>
+</html>

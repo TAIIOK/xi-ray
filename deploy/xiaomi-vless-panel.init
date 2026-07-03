@@ -1,0 +1,20 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=10
+
+USE_PROCD=1
+
+start_service() {
+  PANEL="$(ls /mnt/usb-*/xiaomi-vless/panel 2>/dev/null | head -1)"
+  CONFIG="$(ls /mnt/usb-*/xiaomi-vless/panel.json 2>/dev/null | head -1)"
+  [ -x "$PANEL" ] || return 1
+  procd_open_instance
+  procd_set_param command "$PANEL"
+  procd_append_param command -config
+  procd_append_param command "$CONFIG"
+  procd_set_param respawn
+  procd_set_param stdout 1
+  procd_set_param stderr 1
+  procd_close_instance
+}

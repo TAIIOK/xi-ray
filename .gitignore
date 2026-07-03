@@ -1,0 +1,6 @@
+dist/
+*.tmp
+.DS_Store
+deploy/panel.local.json
+.idea
+docs/

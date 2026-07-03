@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Логи — Xiaomi VLESS</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <strong>Xiaomi VLESS Panel</strong>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/servers">Серверы</a>
+      <a href="/subscriptions">Подписки</a>
+      <a href="/routing">Routing</a>
+      <a href="/settings">Настройки</a>
+      <a href="/logs" class="active">Логи</a>
+      <a href="/logout">Выход</a>
+    </nav>
+  </header>
+  <main>
+    <div id="msg" class="msg" hidden></div>
+    <div class="card">
+      <div class="field">
+        <label class="label">Источник</label>
+        <select id="source">
+          <option value="startup">Xray startup</option>
+          <option value="panel">Panel</option>
+          <option value="xray-access">Xray access</option>
+          <option value="xray-error">Xray error</option>
+        </select>
+        <label class="label">Строк</label>
+        <input id="lines" type="number" value="200" min="50" max="2000" style="width:6rem">
+        <button id="btn-refresh">Обновить</button>
+        <label><input type="checkbox" id="auto-refresh"> Авто (10с)</label>
+      </div>
+      <pre id="log-output" class="log-view">Загрузка…</pre>
+    </div>
+  </main>
+  <script src="/static/app.js"></script>
+  <script>
+    let timer = null;
+
+    async function loadLogs() {
+      const source = document.getElementById('source').value;
+      const lines = document.getElementById('lines').value || 200;
+      const data = await API.get(`/api/logs?source=${encodeURIComponent(source)}&lines=${lines}`);
+      const pre = document.getElementById('log-output');
+      if (data.message && !(data.lines || []).length) {
+        pre.textContent = data.message + '\n' + (data.path || '');
+        return;
+      }
+      pre.textContent = (data.lines || []).join('\n') || '(пусто)';
+      if (data.path) pre.textContent = `# ${data.path} (${data.total} lines total)\n\n` + pre.textContent;
+    }
+
+    document.getElementById('btn-refresh').onclick = () => loadLogs().catch(e => showMsg(document.getElementById('msg'), e.message));
+    document.getElementById('source').onchange = () => loadLogs().catch(() => {});
+    document.getElementById('auto-refresh').onchange = (e) => {
+      clearInterval(timer);
+      timer = null;
+      if (e.target.checked) timer = setInterval(() => loadLogs().catch(() => {}), 10000);
+    };
+
+    loadLogs().catch(e => showMsg(document.getElementById('msg'), e.message));
+  </script>
+</body>
+</html>

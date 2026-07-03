@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build release bundle
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}" make release-bundle VERSION="${GITHUB_REF_NAME}"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          ARCHIVE="dist/release/xiaomi-vless-${TAG}-linux-arm64.tar.gz"
+          SHA_FILE="${ARCHIVE}.sha256"
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --generate-notes \
+            "$ARCHIVE" \
+            "$SHA_FILE" \
+            dist/release/staging/manifest.json \
+            dist/release/staging/panel.sha256
