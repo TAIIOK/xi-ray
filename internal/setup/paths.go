@@ -132,6 +132,7 @@ func RunSetup(p config.Paths) SetupResult {
 		{p.StartupScript, "startup_xray_guest.sh"},
 		{p.IptablesScript, "xray-guest-iptables.sh"},
 		{SysctlPath(p), "xray-guest-sysctl.sh"},
+		{filepath.Join(p.PanelDataDir, "boot-xiaomi-vless.sh"), "boot-xiaomi-vless.sh"},
 	} {
 		if err := installScript(item.dest, item.script); err != nil {
 			add("install", item.dest, err.Error(), false)
@@ -146,7 +147,7 @@ func RunSetup(p config.Paths) SetupResult {
 		add("env", filepath.Join(p.PanelDataDir, "xray.env"), "environment file written", true)
 	}
 
-	if err := ensureAutostart(p.StartupScript); err != nil {
+	if err := ensureAutostart(p.PanelDataDir); err != nil {
 		add("autostart", "/data/startup_user.sh", err.Error(), false)
 	} else {
 		add("autostart", "/data/startup_user.sh", "boot hook registered", true)
@@ -205,10 +206,18 @@ func usbPathFromXrayBin(xrayBin string) string {
 	return config.USBMountFromXrayBin(xrayBin)
 }
 
-func ensureAutostart(startupScript string) error {
-	const marker = "# xiaomi-vless-guest-vpn"
+func ensureAutostart(panelHome string) error {
+	const marker = "# xiaomi-vless-boot"
 	userStartup := "/data/startup_user.sh"
-	line := fmt.Sprintf("sleep 20 && %s", startupScript)
+	bootDst := "/data/xiaomi-vless-boot.sh"
+	bootSrc := filepath.Join(panelHome, "boot-xiaomi-vless.sh")
+	line := fmt.Sprintf("[ -x %s ] && %s >/dev/null 2>&1 &", bootDst, bootDst)
+
+	if data, err := os.ReadFile(bootSrc); err == nil {
+		if err := os.WriteFile(bootDst, data, 0o755); err != nil {
+			return fmt.Errorf("install boot script: %w", err)
+		}
+	}
 
 	if data, err := os.ReadFile(userStartup); err == nil {
 		if strings.Contains(string(data), marker) {

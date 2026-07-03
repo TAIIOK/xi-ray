@@ -1,24 +1,28 @@
 #!/bin/sh
+# Install xiaomi-vless from git checkout (developer path).
+#
+#   make build-arm64
+#   ssh root@192.168.31.1 'sh -s' < deploy/install.sh
+#
+# Or on the router from a cloned repo:
+#   make install
 set -eu
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+COMMON_SH="${SCRIPT_DIR}/deploy/install-common.sh"
+[ -f "$COMMON_SH" ] || { echo "missing $COMMON_SH" >&2; exit 1; }
+# shellcheck source=deploy/install-common.sh
+. "$COMMON_SH"
 
-USB_MOUNT=""
-for d in /mnt/usb-*; do
-  if [ -d "$d" ]; then
-    USB_MOUNT="$d"
-    break
-  fi
-done
-
-if [ -z "$USB_MOUNT" ]; then
-  echo "USB not mounted under /mnt/usb-* — plug in USB and retry." >&2
-  exit 1
-fi
+USB_MOUNT="$(find_usb_mount)" || die "USB not mounted under /mnt/usb-* — plug in USB and retry"
 
 INSTALL_DIR="${USB_MOUNT}/xiaomi-vless"
 PANEL_BIN="${INSTALL_DIR}/panel"
 PANEL_CONFIG="${INSTALL_DIR}/panel.json"
+
+log "source: $SCRIPT_DIR"
+log "USB mount: $USB_MOUNT"
+log "install dir: $INSTALL_DIR"
 
 mkdir -p "$INSTALL_DIR"
 mkdir -p "${INSTALL_DIR}/updates/downloads" "${INSTALL_DIR}/updates/staging"
@@ -29,54 +33,47 @@ if [ -f "${SCRIPT_DIR}/dist/panel-linux-arm64" ]; then
 elif [ -f "${SCRIPT_DIR}/dist/panel" ]; then
   cp "${SCRIPT_DIR}/dist/panel" "$PANEL_BIN"
 else
-  echo "Build binary first: make build-arm64" >&2
-  exit 1
+  die "Build binary first: make build-arm64"
 fi
 chmod +x "$PANEL_BIN"
+log "panel binary installed"
 
 if [ ! -f "$PANEL_CONFIG" ]; then
   cp "${SCRIPT_DIR}/deploy/panel.json.example" "$PANEL_CONFIG"
   sed -i "s|/mnt/usb-ed49605f|${USB_MOUNT}|g" "$PANEL_CONFIG" 2>/dev/null || \
     sed -i '' "s|/mnt/usb-ed49605f|${USB_MOUNT}|g" "$PANEL_CONFIG"
   chmod 600 "$PANEL_CONFIG"
+  log "created $PANEL_CONFIG"
+else
+  log "keeping existing $PANEL_CONFIG"
 fi
 
 cp "${SCRIPT_DIR}/scripts/startup_xray_guest.sh" "${INSTALL_DIR}/startup_xray_guest.sh"
 cp "${SCRIPT_DIR}/scripts/xray-guest-iptables.sh" "${INSTALL_DIR}/xray-guest-iptables.sh"
 cp "${SCRIPT_DIR}/scripts/xray-guest-sysctl.sh" "${INSTALL_DIR}/xray-guest-sysctl.sh"
-chmod +x "${INSTALL_DIR}/startup_xray_guest.sh" "${INSTALL_DIR}/xray-guest-iptables.sh" "${INSTALL_DIR}/xray-guest-sysctl.sh"
+cp "${SCRIPT_DIR}/scripts/boot-xiaomi-vless.sh" "${INSTALL_DIR}/boot-xiaomi-vless.sh"
+cp "${SCRIPT_DIR}/deploy/hotplug-usb-xiaomi-vless.sh" "${INSTALL_DIR}/hotplug-usb-xiaomi-vless.sh"
+chmod +x "${INSTALL_DIR}/startup_xray_guest.sh" "${INSTALL_DIR}/xray-guest-iptables.sh" \
+  "${INSTALL_DIR}/xray-guest-sysctl.sh" "${INSTALL_DIR}/boot-xiaomi-vless.sh" \
+  "${INSTALL_DIR}/hotplug-usb-xiaomi-vless.sh"
+log "guest VPN and boot scripts installed"
 
 cp "${SCRIPT_DIR}/deploy/panel-updater.sh" "${INSTALL_DIR}/panel-updater.sh"
 chmod +x "${INSTALL_DIR}/panel-updater.sh"
 
-# Guest VPN autostart (startup_user.sh, uci, procd, cron)
-INSTALL_DIR="$INSTALL_DIR" USB_MOUNT="$USB_MOUNT" sh "${SCRIPT_DIR}/deploy/install-autostart.sh"
+INSTALL_DIR="$INSTALL_DIR" USB_MOUNT="$USB_MOUNT" \
+  INIT_SRC="${SCRIPT_DIR}/deploy/xiaomi-vless-xray.init" \
+  BOOT_SRC="${SCRIPT_DIR}/scripts/boot-xiaomi-vless.sh" \
+  sh "${SCRIPT_DIR}/deploy/install-autostart.sh"
 
-# Web panel autostart — only boot hook stays on router /data
-PANEL_MARKER="# xiaomi-vless-panel"
-UPDATE_RESUME_MARKER="# xiaomi-vless-update-resume"
-USER_STARTUP="/data/startup_user.sh"
-if [ ! -f "$USER_STARTUP" ]; then
-  printf '%s\n' '#!/bin/sh' > "$USER_STARTUP"
-  chmod +x "$USER_STARTUP"
-fi
-if ! grep -q "$UPDATE_RESUME_MARKER" "$USER_STARTUP" 2>/dev/null; then
-  echo "$UPDATE_RESUME_MARKER" >> "$USER_STARTUP"
-  echo "[ -x ${INSTALL_DIR}/panel-updater.sh ] && ${INSTALL_DIR}/panel-updater.sh resume >/dev/null 2>&1" >> "$USER_STARTUP"
-fi
-if ! grep -q "$PANEL_MARKER" "$USER_STARTUP" 2>/dev/null; then
-  echo "$PANEL_MARKER" >> "$USER_STARTUP"
-  echo "sleep 25 && ${PANEL_BIN} -config ${PANEL_CONFIG} >/dev/null 2>&1 &" >> "$USER_STARTUP"
+install_panel_init "${SCRIPT_DIR}/deploy/xiaomi-vless-panel.init"
+
+start_panel "$PANEL_BIN" "$PANEL_CONFIG"
+if wait_for_panel "$PANEL_BIN"; then
+  log "panel is responding on :7777"
+else
+  log "WARN: panel may still be starting — check: tail -f ${INSTALL_DIR}/panel.log"
 fi
 
-if [ -d /etc/init.d ] && [ -f "${SCRIPT_DIR}/deploy/xiaomi-vless-panel.init" ]; then
-  cp "${SCRIPT_DIR}/deploy/xiaomi-vless-panel.init" /etc/init.d/xiaomi-vless-panel
-  chmod +x /etc/init.d/xiaomi-vless-panel
-  /etc/init.d/xiaomi-vless-panel enable 2>/dev/null || true
-fi
-
-echo "Installed panel to ${PANEL_BIN}"
-echo "USB home: ${INSTALL_DIR}"
-echo "Guest VPN autostart: ${INSTALL_DIR}/startup_xray_guest.sh"
-echo "Log after reboot: tail -f ${INSTALL_DIR}/xray-startup.log"
-echo "Open http://192.168.31.1:7777 (default admin/admin — change on first login)"
+start_xray "$INSTALL_DIR"
+print_install_done "$INSTALL_DIR" "$PANEL_BIN"

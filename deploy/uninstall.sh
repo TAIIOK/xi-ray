@@ -3,12 +3,14 @@
 # Safe by default: dry-run without --yes.
 set -eu
 
+MARKER_BOOT="# xiaomi-vless-boot"
 MARKER_GUEST="# xiaomi-vless-guest-vpn"
 MARKER_PANEL="# xiaomi-vless-panel"
 MARKER_UPDATE="# xiaomi-vless-update-resume"
 
 USER_STARTUP="/data/startup_user.sh"
 CRON_FILE="/etc/crontabs/root"
+BOOT_SCRIPT="/data/xiaomi-vless-boot.sh"
 SYSCTL_CONF="/etc/sysctl.d/99-xray-guest.conf"
 
 DO_IT=0
@@ -182,12 +184,14 @@ cleanup_iptables() {
 }
 
 cleanup_startup_user() {
+  remove_marker_block "$USER_STARTUP" "$MARKER_BOOT" 1
   remove_marker_block "$USER_STARTUP" "$MARKER_GUEST" 1
   remove_marker_block "$USER_STARTUP" "$MARKER_PANEL" 1
   remove_marker_block "$USER_STARTUP" "$MARKER_UPDATE" 1
 }
 
 cleanup_cron() {
+  remove_marker_block "$CRON_FILE" "$MARKER_BOOT" 2
   remove_marker_block "$CRON_FILE" "$MARKER_GUEST" 2
 }
 
@@ -212,8 +216,21 @@ cleanup_uci_firewall() {
   log "removed uci firewall.startup_xray_guest"
 }
 
+cleanup_hotplug() {
+  path="/etc/hotplug.d/block/99-xiaomi-vless"
+  if [ ! -f "$path" ]; then
+    return 0
+  fi
+  if [ "$DO_IT" -eq 0 ]; then
+    log "WOULD: rm -f $path"
+    return 0
+  fi
+  rm -f "$path"
+  log "removed $path"
+}
+
 cleanup_initd() {
-  for svc in xiaomi-vless-panel xiaomi-vless-xray; do
+  for svc in xiaomi-vless-panel xiaomi-vless-xray xiaomi-vless-boot; do
     path="/etc/init.d/$svc"
     if [ ! -f "$path" ]; then
       continue
@@ -235,7 +252,7 @@ cleanup_sysctl() {
 }
 
 cleanup_legacy_data() {
-  for path in /data/xiaomi-vless /data/startup_xray_guest.sh /data/xray-guest-iptables.sh; do
+  for path in /data/xiaomi-vless /data/startup_xray_guest.sh /data/xray-guest-iptables.sh "$BOOT_SCRIPT" /data/xiaomi-vless-boot.log; do
     if [ -e "$path" ]; then
       if [ "$DO_IT" -eq 0 ]; then
         log "WOULD: rm -rf $path"
@@ -248,7 +265,7 @@ cleanup_legacy_data() {
 }
 
 cleanup_temp() {
-  for path in /tmp/xiaomi-vless-update.lock /tmp/xiaomi-vless-update.lock.d; do
+  for path in /tmp/xiaomi-vless-update.lock /tmp/xiaomi-vless-update.lock.d /tmp/xiaomi-vless-boot.lock /tmp/xiaomi-vless-boot.lock.d; do
     if [ -e "$path" ]; then
       action rm -rf "$path"
     fi
@@ -324,6 +341,7 @@ cleanup_iptables
 cleanup_startup_user
 cleanup_cron
 cleanup_uci_firewall
+cleanup_hotplug
 cleanup_initd
 cleanup_sysctl
 cleanup_legacy_data

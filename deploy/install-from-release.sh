@@ -9,19 +9,13 @@
 set -eu
 
 BUNDLE_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-
-log() { printf '[install] %s\n' "$*"; }
-die() { printf '[install] ERROR: %s\n' "$*" >&2; exit 1; }
-
-find_usb_mount() {
-  for d in /mnt/usb-*; do
-    if [ -d "$d" ] && [ -w "$d" ]; then
-      echo "$d"
-      return 0
-    fi
-  done
-  return 1
-}
+COMMON_SH="$BUNDLE_DIR/deploy/install-common.sh"
+if [ ! -f "$COMMON_SH" ]; then
+  COMMON_SH="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)/deploy/install-common.sh"
+fi
+[ -f "$COMMON_SH" ] || { printf '[install] ERROR: missing install-common.sh\n' >&2; exit 1; }
+# shellcheck source=deploy/install-common.sh
+. "$COMMON_SH"
 
 verify_panel() {
   if [ ! -f "$BUNDLE_DIR/panel" ]; then
@@ -67,7 +61,7 @@ install_files() {
   chmod +x "$INSTALL_DIR/panel-updater.sh"
 
   mkdir -p "$INSTALL_DIR/scripts"
-  for f in startup_xray_guest.sh xray-guest-iptables.sh xray-guest-sysctl.sh; do
+  for f in startup_xray_guest.sh xray-guest-iptables.sh xray-guest-sysctl.sh boot-xiaomi-vless.sh; do
     src="$BUNDLE_DIR/scripts/$f"
     [ -f "$src" ] || die "missing $src in bundle"
     cp -f "$src" "$INSTALL_DIR/scripts/$f"
@@ -78,73 +72,15 @@ install_files() {
 }
 
 install_autostart_hooks() {
-  PANEL_MARKER="# xiaomi-vless-panel"
-  UPDATE_RESUME_MARKER="# xiaomi-vless-update-resume"
-  USER_STARTUP="/data/startup_user.sh"
-
-  if [ ! -f "$USER_STARTUP" ]; then
-    printf '%s\n' '#!/bin/sh' > "$USER_STARTUP"
-    chmod +x "$USER_STARTUP"
-  fi
-
-  if ! grep -q "$UPDATE_RESUME_MARKER" "$USER_STARTUP" 2>/dev/null; then
-    {
-      echo "$UPDATE_RESUME_MARKER"
-      echo "[ -x ${INSTALL_DIR}/panel-updater.sh ] && ${INSTALL_DIR}/panel-updater.sh resume >/dev/null 2>&1"
-    } >> "$USER_STARTUP"
-  fi
-
-  if ! grep -q "$PANEL_MARKER" "$USER_STARTUP" 2>/dev/null; then
-    {
-      echo "$PANEL_MARKER"
-      echo "sleep 25 && ${PANEL_BIN} -config ${PANEL_CONFIG} >/dev/null 2>&1 &"
-    } >> "$USER_STARTUP"
-  fi
-
   if [ -f "$BUNDLE_DIR/deploy/install-autostart.sh" ]; then
     INSTALL_DIR="$INSTALL_DIR" USB_MOUNT="$USB_MOUNT" \
       INIT_SRC="$BUNDLE_DIR/deploy/xiaomi-vless-xray.init" \
+      BOOT_SRC="$BUNDLE_DIR/scripts/boot-xiaomi-vless.sh" \
       sh "$BUNDLE_DIR/deploy/install-autostart.sh"
   fi
 
-  if [ -f "$BUNDLE_DIR/deploy/xiaomi-vless-panel.init" ] && [ -d /etc/init.d ]; then
-    cp -f "$BUNDLE_DIR/deploy/xiaomi-vless-panel.init" /etc/init.d/xiaomi-vless-panel
-    chmod +x /etc/init.d/xiaomi-vless-panel
-    /etc/init.d/xiaomi-vless-panel enable 2>/dev/null || true
-  fi
-}
-
-start_panel() {
-  if [ -x /etc/init.d/xiaomi-vless-panel ]; then
-    /etc/init.d/xiaomi-vless-panel stop 2>/dev/null || true
-    sleep 1
-    /etc/init.d/xiaomi-vless-panel start 2>/dev/null || /etc/init.d/xiaomi-vless-panel restart 2>/dev/null || true
-    log "panel started via procd"
-    return 0
-  fi
-  killall panel 2>/dev/null || true
-  sleep 1
-  nohup "$PANEL_BIN" -config "$PANEL_CONFIG" >/dev/null 2>&1 &
-  log "panel started in background"
-}
-
-print_done() {
-  ver="$("$PANEL_BIN" -version 2>/dev/null | head -1 || echo unknown)"
-  echo ""
-  echo "============================================"
-  echo "  Xiaomi VLESS — установка завершена"
-  echo "============================================"
-  echo "  Версия:   ${ver:-unknown}"
-  echo "  Каталог:  $INSTALL_DIR"
-  echo "  Панель:   http://192.168.31.1:7777"
-  echo "  Логин:    admin / admin"
-  echo ""
-  echo "  Откройте /onboarding — скачайте Xray и"
-  echo "  добавьте подписку, затем нажмите Apply."
-  echo ""
-  echo "  Лог panel:  tail -f ${INSTALL_DIR}/panel.log"
-  echo "  Лог VPN:    tail -f ${INSTALL_DIR}/xray-startup.log"
-  echo "============================================"
+  init_src="$BUNDLE_DIR/deploy/xiaomi-vless-panel.init"
+  install_panel_init "$init_src"
 }
 
 # --- main ---
@@ -168,5 +104,13 @@ log "install dir: $INSTALL_DIR"
 install_files
 write_config
 install_autostart_hooks
-start_panel
-print_done
+
+start_panel "$PANEL_BIN" "$PANEL_CONFIG"
+if wait_for_panel "$PANEL_BIN"; then
+  log "panel is responding on :7777"
+else
+  log "WARN: panel may still be starting — check: tail -f ${INSTALL_DIR}/panel.log"
+fi
+
+start_xray "$INSTALL_DIR"
+print_install_done "$INSTALL_DIR" "$PANEL_BIN"

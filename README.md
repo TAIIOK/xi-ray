@@ -59,7 +59,7 @@ sh install.sh
 ### Установка из исходников (разработчик)
 
 ```bash
-scp dist/panel-linux-arm64 root@192.168.31.1:/tmp/panel
+make build-arm64
 ssh root@192.168.31.1 'sh -s' < deploy/install.sh
 ```
 
@@ -68,6 +68,12 @@ ssh root@192.168.31.1 'sh -s' < deploy/install.sh
 ```bash
 make install
 ```
+
+`deploy/install.sh` после копирования файлов:
+- регистрирует autostart (procd, cron, `startup_user.sh`)
+- **сразу запускает panel** (procd с respawn, иначе nohup)
+- **запускает Xray**, если уже настроен (`xray.env`), иначе ждёт onboarding
+- проверяет, что панель отвечает на `:7777`
 
 Панель: **http://192.168.31.1:7777**
 
@@ -103,7 +109,7 @@ ssh root@192.168.31.1 'sh -s' < deploy/uninstall.sh -- --yes
 sh uninstall.sh --yes
 ```
 
-Что удаляется с роутера: хуки в `/data/startup_user.sh`, cron, `uci firewall`, init.d-сервисы, `/etc/sysctl.d/99-xray-guest.conf`, iptables-цепочки `XRAY_GUEST_*`. Что удаляется с USB: каталоги `xiaomi-vless/` и `xray/` (если не указан `--keep-xray`). После деинсталляции рекомендуется перезагрузка для сброса sysctl.
+Что удаляется с роутера: `/data/xiaomi-vless-boot.sh`, hotplug, хуки в `/data/startup_user.sh`, cron, `uci firewall`, init.d-сервисы (`xiaomi-vless-boot`, panel, xray), `/etc/sysctl.d/99-xray-guest.conf`, iptables-цепочки `XRAY_GUEST_*`. Что удаляется с USB: каталоги `xiaomi-vless/` и `xray/` (если не указан `--keep-xray`). После деинсталляции рекомендуется перезагрузка для сброса sysctl.
 
 ## Автозапуск VPN после перезагрузки
 
@@ -111,15 +117,26 @@ sh uninstall.sh --yes
 
 | Механизм | Назначение |
 |----------|------------|
-| `/data/startup_user.sh` | основной hook Xiaomi после boot |
-| `uci firewall` include | запуск после поднятия firewall |
-| `/etc/init.d/xiaomi-vless-xray` | procd-сервис (если доступен) |
-| `cron @reboot` | резервный запуск через 45 сек |
+| `/data/xiaomi-vless-boot.sh` | ждёт USB (до 3 мин), затем panel + xray |
+| `/etc/hotplug.d/block/99-xiaomi-vless` | старт при подключении USB (boot с флешкой) |
+| `/etc/init.d/xiaomi-vless-boot` | procd START=99, резервный запуск |
+| `/data/startup_user.sh` | hook Xiaomi (может не вызываться на всех прошивках) |
+| `cron @reboot sleep 30` | резервный запуск через 30 сек |
+| `cron * * * * *` | watchdog: поднять panel если упал |
 | `cron */2` | пере-применение iptables каждые 2 мин |
 
-Скрипт `/data/startup_xray_guest.sh`:
+> **Не используйте `uci firewall` include** для VPN-скриптов — firewall ждёт их синхронно, и при boot с USB роутер может не отдать интернет.
 
-- ждёт монтирование USB с Xray (до 120 сек)
+После reboot panel обычно доступен через **1–3 минуты**. Лог: `tail -f /data/xiaomi-vless-boot.log`
+
+Скрипт `/data/xiaomi-vless-boot.sh` (копируется на flash при install):
+
+- ждёт mount USB с panel/xray (до 3 мин)
+- ждёт LAN
+- запускает panel на `0.0.0.0:7777`
+- запускает Xray через `startup_xray_guest.sh`
+
+Скрипт `/mnt/usb-…/xiaomi-vless/startup_xray_guest.sh`:
 - ждёт сеть
 - применяет `sysctl` (rp_filter)
 - запускает Xray
@@ -128,13 +145,21 @@ sh uninstall.sh --yes
 Только автозапуск (без переустановки панели):
 
 ```bash
-ssh root@192.168.31.1 'sh -s' < deploy/install-autostart.sh
+ssh root@192.168.31.1 'INSTALL_DIR=/mnt/usb-XXX/xiaomi-vless USB_MOUNT=/mnt/usb-XXX sh -s' < deploy/install-autostart.sh
+```
+
+Или одноразовый фикс на живом роутере:
+
+```bash
+ssh root@192.168.31.1 'sh -s' < deploy/fix-autostart.sh
 ```
 
 Проверка после reboot:
 
 ```bash
-tail -f /data/xiaomi-vless/xray-startup.log
+tail -f /data/xiaomi-vless-boot.log
+tail -f /mnt/usb-*/xiaomi-vless/xray-startup.log
+pidof panel
 pidof xray
 iptables -t nat -L XRAY_GUEST_TCP -v -n | tail -3
 ```
