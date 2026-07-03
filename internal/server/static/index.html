@@ -134,7 +134,12 @@
       if (s.message) showMsg(document.getElementById('msg'), s.message, s.state === 'running');
     }
 
-    document.getElementById('btn-refresh').onclick = () => loadStatus().catch(e => showMsg(document.getElementById('msg'), e.message));
+    document.getElementById('btn-refresh').onclick = async () => {
+      const btn = document.getElementById('btn-refresh');
+      try {
+        await withButtonBusy(btn, 'Обновление…', () => loadStatus());
+      } catch (e) { showMsg(document.getElementById('msg'), e.message); }
+    };
     document.getElementById('btn-restart').onclick = async () => {
       try {
         await API.send('POST', '/api/restart');

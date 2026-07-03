@@ -78,7 +78,9 @@
       tbody.querySelectorAll('[data-refresh]').forEach(btn => {
         btn.onclick = async () => {
           try {
-            const res = await API.send('POST', '/api/subscriptions/' + btn.dataset.refresh + '/refresh');
+            const res = await withButtonBusy(btn, 'Загрузка…', () =>
+              API.send('POST', '/api/subscriptions/' + btn.dataset.refresh + '/refresh')
+            );
             let msg = 'Загружено серверов: ' + (res.nodes?.length || 0);
             if (res.selection_changed) msg += ' · выбран новый сервер';
             if (res.apply) msg += res.apply.ok ? ' · Apply OK' : ' · Apply: ' + res.apply.message;
@@ -102,11 +104,14 @@
     }
 
     document.getElementById('btn-add-sub').onclick = async () => {
+      const btn = document.getElementById('btn-add-sub');
       try {
         const name = document.getElementById('sub-name').value.trim() || 'Subscription';
         const url = document.getElementById('sub-url').value.trim();
         if (!url) throw new Error('URL обязателен');
-        const res = await API.send('POST', '/api/subscriptions', { name, url });
+        const res = await withButtonBusy(btn, 'Загрузка…', () =>
+          API.send('POST', '/api/subscriptions', { name, url })
+        );
         showMsg(document.getElementById('msg'), 'Добавлено серверов: ' + (res.nodes?.length || 0), true);
         document.getElementById('sub-url').value = '';
         await loadSubs();

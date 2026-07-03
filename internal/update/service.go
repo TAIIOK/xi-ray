@@ -52,6 +52,10 @@ func (s *Service) Status(ctx context.Context) (StatusResponse, error) {
 	if err != nil {
 		return StatusResponse{}, err
 	}
+	if st.Phase == PhaseChecking {
+		st.Phase = PhaseIdle
+		_ = s.store.Save(st)
+	}
 	resp := StatusResponse{
 		CurrentVersion: version.Version,
 		CurrentCommit:  version.Commit,
@@ -70,6 +74,12 @@ func (s *Service) Status(ctx context.Context) (StatusResponse, error) {
 	} else if s.layout.HasPrevious() {
 		resp.PreviousVersion = "previous"
 	}
+	if st.TargetVersion != "" && trimVersion(st.TargetVersion) != trimVersion(version.Version) {
+		resp.Available = &ReleaseInfo{
+			Version:     st.TargetVersion,
+			DownloadURL: st.DownloadURL,
+		}
+	}
 	return resp, nil
 }
 
@@ -81,7 +91,7 @@ func (s *Service) Check(ctx context.Context) (StatusResponse, error) {
 	if err != nil {
 		return StatusResponse{}, err
 	}
-	if st.Phase.IsActive() && st.Phase != PhaseDownloading {
+	if st.Phase.IsActive() && st.Phase != PhaseDownloading && st.Phase != PhaseChecking {
 		return s.Status(ctx)
 	}
 
@@ -90,11 +100,11 @@ func (s *Service) Check(ctx context.Context) (StatusResponse, error) {
 		return StatusResponse{}, err
 	}
 
-	st.Phase = PhaseChecking
 	st.TargetVersion = rel.Version
 	st.DownloadURL = rel.DownloadURL
 	st.PreviousVersion = version.Version
 	st.Attempts = 0
+	st.Phase = PhaseIdle
 	if err := s.store.Save(st); err != nil {
 		return StatusResponse{}, err
 	}
@@ -104,11 +114,6 @@ func (s *Service) Check(ctx context.Context) (StatusResponse, error) {
 		return StatusResponse{}, err
 	}
 	resp.Available = &rel
-	if trimVersion(rel.Version) == trimVersion(version.Version) {
-		st.Phase = PhaseIdle
-		_ = s.store.Save(st)
-		resp.Phase = PhaseIdle
-	}
 	return resp, nil
 }
 

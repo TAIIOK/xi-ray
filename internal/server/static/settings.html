@@ -297,28 +297,35 @@
     let updatePoll = null;
     let lastAvailable = null;
 
-    function phaseLabel(phase) {
-      const map = {
-        idle: 'Готово',
-        checking: 'Проверка…',
-        downloading: 'Скачивание…',
-        extracting: 'Распаковка…',
-        verified: 'Готово к установке',
-        applying: 'Установка…',
-        restarting: 'Перезапуск…',
-        health_check: 'Проверка после обновления…',
-        completed: 'Обновление завершено',
-        failed: 'Ошибка',
-        rolled_back: 'Откат выполнен',
-      };
-      return map[phase] || phase;
+    function phaseLabel(st) {
+      if (!st || typeof st === 'string') {
+        const map = {
+          idle: 'Готово',
+          checking: 'Проверка…',
+          downloading: 'Скачивание…',
+          extracting: 'Распаковка…',
+          verified: 'Готово к установке',
+          applying: 'Установка…',
+          restarting: 'Перезапуск…',
+          health_check: 'Проверка после обновления…',
+          completed: 'Обновление завершено',
+          failed: 'Ошибка',
+          rolled_back: 'Откат выполнен',
+        };
+        return map[st] || st;
+      }
+      const avail = updateAvailable(st);
+      if (st.phase === 'idle' && avail) return 'Доступно обновление ' + avail;
+      if (st.phase === 'idle') return 'Обновлений нет';
+      return phaseLabel(st.phase);
     }
 
     function renderUpdate(st) {
       document.getElementById('upd-current').textContent = (st.current_version || 'dev') + (st.current_commit ? ' (' + st.current_commit + ')' : '');
-      const avail = st.available?.version || lastAvailable?.version || '—';
+      const avail = updateAvailable(st) || '—';
+      if (st.available) lastAvailable = st.available;
       document.getElementById('upd-available').textContent = avail;
-      document.getElementById('upd-phase').textContent = phaseLabel(st.phase);
+      document.getElementById('upd-phase').textContent = phaseLabel(st);
       const errEl = document.getElementById('upd-error');
       if (st.error) {
         errEl.hidden = false;
@@ -334,7 +341,7 @@
       } else {
         wrap.hidden = true;
       }
-      document.getElementById('btn-upd-download').disabled = !(st.can_download && avail !== '—' && avail !== st.current_version);
+      document.getElementById('btn-upd-download').disabled = !(st.can_download && avail !== '—');
       document.getElementById('btn-upd-apply').disabled = !st.can_apply;
       document.getElementById('btn-upd-cancel').disabled = !['checking','downloading','extracting','verified'].includes(st.phase);
       document.getElementById('btn-upd-rollback').disabled = !st.can_rollback;
@@ -354,17 +361,21 @@
     }
 
     document.getElementById('btn-upd-check').onclick = async () => {
+      const btn = document.getElementById('btn-upd-check');
       try {
-        const st = await API.get('/api/update/check');
+        document.getElementById('upd-phase').textContent = 'Проверка…';
+        const st = await withButtonBusy(btn, 'Проверка…', () => API.get('/api/update/check'));
         if (st.available) lastAvailable = st.available;
         renderUpdate(st);
-        showMsg(document.getElementById('msg'), st.available ? 'Доступна версия ' + st.available.version : 'Обновлений нет', true);
+        const avail = updateAvailable(st);
+        showMsg(document.getElementById('msg'), avail ? 'Доступна версия ' + avail : 'Обновлений нет', true);
       } catch (err) { showMsg(document.getElementById('msg'), err.message); }
     };
 
     document.getElementById('btn-upd-download').onclick = async () => {
+      const btn = document.getElementById('btn-upd-download');
       try {
-        const st = await API.send('POST', '/api/update/download', {});
+        const st = await withButtonBusy(btn, 'Скачивание…', () => API.send('POST', '/api/update/download', {}));
         renderUpdate(st);
         showMsg(document.getElementById('msg'), 'Загрузка завершена', true);
       } catch (err) { showMsg(document.getElementById('msg'), err.message); }
@@ -372,8 +383,9 @@
 
     document.getElementById('btn-upd-apply').onclick = async () => {
       if (!confirm('Установить обновление? Панель перезапустится.')) return;
+      const btn = document.getElementById('btn-upd-apply');
       try {
-        await API.send('POST', '/api/update/apply', {});
+        await withButtonBusy(btn, 'Установка…', () => API.send('POST', '/api/update/apply', {}));
         showMsg(document.getElementById('msg'), 'Обновление запущено — страница перезагрузится', true);
         setTimeout(() => location.reload(), 5000);
       } catch (err) { showMsg(document.getElementById('msg'), err.message); }

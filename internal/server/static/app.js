@@ -41,6 +41,41 @@ function showMsg(el, text, ok = false) {
   el.hidden = !text;
 }
 
+function setButtonBusy(btn, busy, busyText) {
+  if (!btn) return;
+  if (busy) {
+    if (!btn.dataset.origText) btn.dataset.origText = btn.textContent;
+    btn.disabled = true;
+    btn.classList.add('busy');
+    btn.textContent = busyText || '…';
+  } else {
+    btn.disabled = false;
+    btn.classList.remove('busy');
+    if (btn.dataset.origText) btn.textContent = btn.dataset.origText;
+    delete btn.dataset.origText;
+  }
+}
+
+async function withButtonBusy(btn, busyText, fn) {
+  setButtonBusy(btn, true, busyText);
+  try {
+    return await fn();
+  } finally {
+    setButtonBusy(btn, false);
+  }
+}
+
+function trimVersion(v) {
+  return String(v || '').replace(/^v/i, '');
+}
+
+function updateAvailable(st) {
+  if (!st) return null;
+  const ver = st.available?.version || st.target_version;
+  if (!ver) return null;
+  return trimVersion(ver) !== trimVersion(st.current_version) ? ver : null;
+}
+
 function setActiveNav() {
   const path = location.pathname.replace(/\/$/, '') || '/';
   document.querySelectorAll('nav a').forEach(a => {
