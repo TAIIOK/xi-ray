@@ -1,4 +1,4 @@
-.PHONY: build build-arm64 test tidy run install release-bundle tag-release
+.PHONY: build build-arm64 test tidy run install uninstall uninstall-yes install-autostart release-bundle tag-release deploy
 
 export GOTOOLCHAIN ?= go1.22.10
 
@@ -32,6 +32,12 @@ install: build-arm64
 
 install-autostart:
 	sh deploy/install-autostart.sh
+
+uninstall:
+	sh deploy/uninstall.sh
+
+uninstall-yes:
+	sh deploy/uninstall.sh --yes
 
 deploy:
 	scp $(ARM_BIN) root@192.168.31.1:/mnt/usb-ed49605f/xiaomi-vless/panel

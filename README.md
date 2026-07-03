@@ -73,6 +73,38 @@ make install
 
 Логин по умолчанию: `admin` / `admin` (смените в настройках).
 
+## Деинсталляция
+
+Скрипт [`deploy/uninstall.sh`](deploy/uninstall.sh) полностью удаляет panel, автозапуск, iptables-правила и данные на USB. Без `--yes` — только просмотр (dry-run).
+
+```bash
+# Посмотреть, что будет удалено
+sh deploy/uninstall.sh
+
+# Полная очистка (роутер + USB xiaomi-vless + xray)
+sh deploy/uninstall.sh --yes
+
+# Только роутер (USB оставить)
+sh deploy/uninstall.sh --yes --router-only
+
+# USB: panel, но Xray оставить
+sh deploy/uninstall.sh --yes --keep-xray
+```
+
+С роутера через SSH:
+
+```bash
+ssh root@192.168.31.1 'sh -s' < deploy/uninstall.sh -- --yes
+```
+
+Из релизного архива (рядом с `install.sh`):
+
+```bash
+sh uninstall.sh --yes
+```
+
+Что удаляется с роутера: хуки в `/data/startup_user.sh`, cron, `uci firewall`, init.d-сервисы, `/etc/sysctl.d/99-xray-guest.conf`, iptables-цепочки `XRAY_GUEST_*`. Что удаляется с USB: каталоги `xiaomi-vless/` и `xray/` (если не указан `--keep-xray`). После деинсталляции рекомендуется перезагрузка для сброса sysctl.
+
 ## Автозапуск VPN после перезагрузки
 
 `deploy/install.sh` регистрирует автозапуск Xray + iptables несколькими способами:
