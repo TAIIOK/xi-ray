@@ -142,7 +142,24 @@
     </div>
 
     <div class="card">
-      <h2>Обновление panel</h2>
+      <h2 data-i18n="settings.xray_update">Обновление Xray</h2>
+      <p class="help-text" data-i18n="settings.xray_update_desc">Скачивает последнюю версию Xray-core (linux arm64) и geo-файлы с GitHub в каталог на USB.</p>
+      <p><span class="label" data-i18n="settings.xray_current">Текущая версия:</span> <strong id="xray-version">—</strong></p>
+      <p class="label" id="xray-path" style="word-break:break-all;margin-bottom:0.75rem"></p>
+      <div class="field-row" style="margin-bottom:0.75rem">
+        <label class="checkbox-field">
+          <input type="checkbox" id="xray-restart" checked>
+          <span data-i18n="settings.xray_restart">Apply + перезапуск Xray после обновления</span>
+        </label>
+      </div>
+      <div class="card-actions">
+        <button type="button" id="btn-xray-update" data-i18n="settings.xray_download">Скачать последнюю версию</button>
+      </div>
+      <div id="xray-update-log" class="setup-log" hidden></div>
+    </div>
+
+    <div class="card" id="panel-update">
+      <h2 data-i18n="settings.panel_update">Обновление panel</h2>
       <p class="label">Безопасное обновление с GitHub Releases. При ошибке доступен откат на предыдущую версию.</p>
       <div id="update-info">
         <p><span class="label">Текущая версия:</span> <strong id="upd-current">—</strong></p>
@@ -213,6 +230,22 @@
       const gn = await API.send('POST', '/api/network/guest-check', { guest_subnet: subnet });
       renderGuestNetworkUI(gn);
       return gn;
+    }
+
+    async function loadXrayStatus() {
+      try {
+        const st = await API.get('/api/xray/status');
+        document.getElementById('xray-version').textContent = st.version || t('common.empty');
+        const pathEl = document.getElementById('xray-path');
+        if (st.path) {
+          pathEl.textContent = st.path;
+          pathEl.hidden = false;
+        } else {
+          pathEl.hidden = true;
+        }
+      } catch (_) {
+        document.getElementById('xray-version').textContent = t('common.empty');
+      }
     }
 
     async function loadSettings() {
@@ -514,10 +547,31 @@
       } catch (err) { showMsg(document.getElementById('msg'), err.message); }
     };
 
+    document.getElementById('btn-xray-update').onclick = async () => {
+      const btn = document.getElementById('btn-xray-update');
+      const logEl = document.getElementById('xray-update-log');
+      try {
+        const res = await withButtonBusy(btn, t('common.loading'), () =>
+          API.send('POST', '/api/xray/update', { restart: document.getElementById('xray-restart').checked })
+        );
+        logEl.hidden = false;
+        const lines = (res.actions || []).map(a => `${a.ok ? '✓' : '✗'} ${a.action}: ${a.message || a.path}`);
+        if (res.message) lines.unshift(res.message);
+        if (res.restart) lines.push(res.restart.ok ? t('settings.xray_restart_ok') : t('settings.xray_restart_fail', { msg: res.restart.message }));
+        logEl.textContent = lines.join('\n');
+        showMsg(document.getElementById('msg'), res.message, res.ok);
+        await loadXrayStatus();
+        if (res.paths?.xray_bin) document.getElementById('xray_bin').value = res.paths.xray_bin;
+      } catch (e) {
+        showMsg(document.getElementById('msg'), e.message);
+      }
+    };
+
     initI18n().then(() => {
       renderHeader();
       applyI18n();
       loadSettings().catch(e => showMsg(document.getElementById('msg'), e.message));
+      loadXrayStatus().catch(() => {});
       refreshUpdate().catch(() => {});
     });
   </script>

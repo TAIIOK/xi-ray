@@ -65,7 +65,10 @@
     "watchdog_history": "Last watchdog event: {msg}",
     "fail_open_active": "Guest Wi‑Fi: direct internet (fail-open). VPN bypass is off until recovery.",
     "panel_version": "panel {version}",
-    "update_phase": " — update: {phase}"
+    "update_phase": " — update: {phase}",
+    "update_available": "Panel update {version} is available (current: {current})",
+    "update_in_progress": "Panel update in progress: {phase}",
+    "update_go_settings": "Update →"
   },
   "servers": {
     "title": "Servers — Xiaomi VLESS",
@@ -120,7 +123,19 @@
     "deleted": "Deleted",
     "confirm_delete": "Delete subscription and its servers?",
     "added_nodes": "Added servers: {count}",
-    "url_required": "URL is required"
+    "url_required": "URL is required",
+    "stat_count": "Subscriptions",
+    "stat_nodes": "Total servers",
+    "auto_refresh": "Auto refresh",
+    "open_settings": "Settings →",
+    "add_hint": "Your VPN provider subscription URL. Servers load automatically and appear on the Servers page.",
+    "empty": "No subscriptions yet. Add a URL above or import a link on the Servers page.",
+    "node_count": "{count} srv",
+    "badge_on": "On",
+    "badge_off": "Off",
+    "updated_just_now": "just now",
+    "updated_min_ago": "{min} min ago",
+    "updated_hours_ago": "{h} h ago"
   },
   "logs": {
     "title": "Logs — Xiaomi VLESS",
@@ -212,7 +227,14 @@
     "password_updated": "Password updated",
     "pick_file": "Select a file",
     "confirm_restore": "Restore configuration? Current settings will be replaced.",
-    "restored": "Backup restored"
+    "restored": "Backup restored",
+    "xray_update": "Xray update",
+    "xray_update_desc": "Downloads the latest Xray-core (linux arm64) and geo files from GitHub to the USB directory.",
+    "xray_current": "Current version:",
+    "xray_restart": "Apply + restart Xray after update",
+    "xray_download": "Download latest version",
+    "xray_restart_ok": "Xray restarted after update",
+    "xray_restart_fail": "Update OK, but restart failed: {msg}"
   },
   "routing": {
     "title": "Routing — Xiaomi VLESS",

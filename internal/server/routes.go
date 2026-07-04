@@ -101,6 +101,9 @@ func (s *Server) Router() http.Handler {
 		r.Put("/api/routing", s.handleAPIUpdateRouting)
 		r.Put("/api/auth/password", s.handleAPIUpdatePassword)
 
+		r.Get("/api/xray/status", s.handleAPIXrayStatus)
+		r.Post("/api/xray/update", s.handleAPIXrayUpdate)
+
 		r.Get("/api/update/status", s.handleAPIUpdateStatus)
 		r.Get("/api/update/check", s.handleAPIUpdateCheck)
 		r.Post("/api/update/download", s.handleAPIUpdateDownload)
@@ -202,7 +205,26 @@ func (s *Server) handleAPISettings(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAPISubscriptionsList(w http.ResponseWriter, r *http.Request) {
 	cfg := s.panel.Store().Get()
-	writeJSON(w, http.StatusOK, map[string]any{"subscriptions": cfg.Subscriptions})
+	items := make([]map[string]any, 0, len(cfg.Subscriptions))
+	for _, sub := range cfg.Subscriptions {
+		nodeCount := 0
+		for _, n := range cfg.Nodes {
+			if n.SubscriptionID == sub.ID {
+				nodeCount++
+			}
+		}
+		items = append(items, map[string]any{
+			"id":         sub.ID,
+			"name":       sub.Name,
+			"url":        sub.URL,
+			"updated_at": sub.UpdatedAt,
+			"node_count": nodeCount,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"subscriptions": items,
+		"total_nodes":   len(cfg.Nodes),
+	})
 }
 
 func (s *Server) handleAPIObservatory(w http.ResponseWriter, r *http.Request) {

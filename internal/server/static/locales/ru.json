@@ -65,7 +65,10 @@
     "watchdog_history": "Последнее событие сторожа: {msg}",
     "fail_open_active": "Гостевая Wi‑Fi: прямой интернет (fail-open). VPN отключён до восстановления.",
     "panel_version": "panel {version}",
-    "update_phase": " — обновление: {phase}"
+    "update_phase": " — обновление: {phase}",
+    "update_available": "Доступна новая версия panel {version} (сейчас {current})",
+    "update_in_progress": "Идёт обновление panel: {phase}",
+    "update_go_settings": "Обновить →"
   },
   "servers": {
     "title": "Серверы — Xiaomi VLESS",
@@ -120,7 +123,19 @@
     "deleted": "Удалено",
     "confirm_delete": "Удалить подписку и её серверы?",
     "added_nodes": "Добавлено серверов: {count}",
-    "url_required": "URL обязателен"
+    "url_required": "URL обязателен",
+    "stat_count": "Подписок",
+    "stat_nodes": "Серверов всего",
+    "auto_refresh": "Автообновление",
+    "open_settings": "Настройки →",
+    "add_hint": "URL подписки провайдера VPN. Серверы загрузятся автоматически и появятся на странице «Серверы».",
+    "empty": "Нет подписок. Добавьте URL выше или импортируйте ссылку на странице «Серверы».",
+    "node_count": "{count} серв.",
+    "badge_on": "Включено",
+    "badge_off": "Выключено",
+    "updated_just_now": "только что",
+    "updated_min_ago": "{min} мин назад",
+    "updated_hours_ago": "{h} ч назад"
   },
   "logs": {
     "title": "Логи — Xiaomi VLESS",
@@ -212,7 +227,14 @@
     "password_updated": "Пароль обновлён",
     "pick_file": "Выберите файл",
     "confirm_restore": "Восстановить конфигурацию? Текущие настройки будут заменены.",
-    "restored": "Backup восстановлен"
+    "restored": "Backup восстановлен",
+    "xray_update": "Обновление Xray",
+    "xray_update_desc": "Скачивает последнюю версию Xray-core (linux arm64) и geo-файлы с GitHub в каталог на USB.",
+    "xray_current": "Текущая версия:",
+    "xray_restart": "Apply + перезапуск Xray после обновления",
+    "xray_download": "Скачать последнюю версию",
+    "xray_restart_ok": "Xray перезапущен после обновления",
+    "xray_restart_fail": "Обновление OK, но перезапуск не удался: {msg}"
   },
   "routing": {
     "title": "Маршрутизация — Xiaomi VLESS",

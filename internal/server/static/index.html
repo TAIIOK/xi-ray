@@ -21,6 +21,12 @@
       <span id="failopen-banner-text"></span>
     </div>
     <div id="guest-network-alert" class="msg warn" hidden></div>
+    <div id="panel-update-banner" class="msg ok update-banner" hidden>
+      <div class="update-banner-body">
+        <span id="panel-update-banner-text"></span>
+        <a href="/settings#panel-update" class="update-banner-link" data-i18n="dashboard.update_go_settings">Обновить →</a>
+      </div>
+    </div>
     <div class="grid">
       <div class="card">
         <div class="label" data-i18n="dashboard.status">Статус</div>
@@ -188,6 +194,29 @@
       }
     }
 
+    async function checkPanelUpdate() {
+      const banner = document.getElementById('panel-update-banner');
+      const textEl = document.getElementById('panel-update-banner-text');
+      try {
+        let st = await API.get('/api/update/status');
+        if (!updateAvailable(st) && st.phase === 'idle') {
+          try { st = await API.get('/api/update/check'); } catch (_) { /* offline */ }
+        }
+        const avail = updateAvailable(st);
+        if (avail && st.phase === 'idle') {
+          textEl.textContent = t('dashboard.update_available', { version: avail, current: st.current_version || 'dev' });
+          banner.hidden = false;
+        } else if (st.phase && st.phase !== 'idle' && st.phase !== 'completed' && st.phase !== 'rolled_back') {
+          textEl.textContent = t('dashboard.update_in_progress', { phase: t('update.' + st.phase) || st.phase });
+          banner.hidden = false;
+        } else {
+          banner.hidden = true;
+        }
+      } catch (_) {
+        banner.hidden = true;
+      }
+    }
+
     async function loadStatus() {
       const s = await API.get('/api/status');
       const el = document.getElementById('state');
@@ -241,6 +270,7 @@
         renderHeader();
         applyI18n();
         loadStatus().catch(e => showMsg(document.getElementById('msg'), e.message));
+        checkPanelUpdate().catch(() => {});
         setInterval(() => loadStatus().catch(() => {}), 15000);
         API.get('/api/update/status').then(st => {
           const footer = document.createElement('footer');

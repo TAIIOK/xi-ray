@@ -8,40 +8,115 @@
 </head>
 <body>
   <header id="app-header"></header>
-  <main>
+  <main class="page-subscriptions">
     <div id="msg" class="msg" hidden></div>
 
-    <div class="card">
+    <div class="sub-stats grid">
+      <div class="card sub-stat-card">
+        <div class="label" data-i18n="subscriptions.stat_count">Подписок</div>
+        <div id="stat-subs" class="value">—</div>
+      </div>
+      <div class="card sub-stat-card">
+        <div class="label" data-i18n="subscriptions.stat_nodes">Серверов всего</div>
+        <div id="stat-nodes" class="value">—</div>
+      </div>
+      <div class="card sub-stat-card sub-stat-policy">
+        <div class="label" data-i18n="subscriptions.auto_refresh">Автообновление</div>
+        <div id="policy-badge" class="sub-policy-badge">—</div>
+        <p class="help-text" id="policy-hint" style="margin:0.5rem 0 0"></p>
+        <a href="/settings" class="sub-settings-link" data-i18n="subscriptions.open_settings">Настройки →</a>
+      </div>
+    </div>
+
+    <div class="card sub-add-card">
       <h2 data-i18n="subscriptions.add">Добавить подписку</h2>
-      <div class="field">
-        <label class="label" data-i18n="subscriptions.name">Название</label>
-        <input id="sub-name" placeholder="My subscription">
-      </div>
-      <div class="field">
-        <label class="label" data-i18n="subscriptions.url">URL подписки</label>
-        <input id="sub-url" placeholder="https://...">
-      </div>
-      <button id="btn-add-sub" data-i18n="subscriptions.add_load">Добавить и загрузить</button>
+      <p class="help-text" data-i18n="subscriptions.add_hint">URL подписки провайдера VPN. Серверы загрузятся автоматически и появятся на странице «Серверы».</p>
+      <form id="add-sub-form" class="sub-add-form">
+        <div class="field">
+          <label class="label" data-i18n="subscriptions.name">Название</label>
+          <input id="sub-name" placeholder="My subscription" autocomplete="off">
+        </div>
+        <div class="field sub-url-field">
+          <label class="label" data-i18n="subscriptions.url">URL подписки</label>
+          <input id="sub-url" type="url" placeholder="https://..." autocomplete="off">
+        </div>
+        <button type="submit" id="btn-add-sub" data-i18n="subscriptions.add_load">Добавить и загрузить</button>
+      </form>
     </div>
 
     <div class="card">
-      <h2 data-i18n="subscriptions.list">Подписки</h2>
-      <p class="label" id="policy-hint"></p>
-      <table>
-        <thead>
-          <tr>
-            <th data-i18n="subscriptions.name">Название</th>
-            <th data-i18n="subscriptions.col_updated">Обновлено</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="subs-body"></tbody>
-      </table>
+      <div class="sub-list-header">
+        <h2 data-i18n="subscriptions.list">Подписки</h2>
+        <button type="button" id="btn-reload-subs" class="secondary btn-sm" data-i18n="common.refresh">Обновить</button>
+      </div>
+      <div id="subs-empty" class="sub-empty" hidden>
+        <p data-i18n="subscriptions.empty">Нет подписок. Добавьте URL выше или импортируйте ссылку на странице «Серверы».</p>
+      </div>
+      <div id="subs-grid" class="sub-grid"></div>
     </div>
   </main>
   <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
   <script>
+    function truncateUrl(url, max = 48) {
+      const s = String(url || '');
+      if (s.length <= max) return s;
+      const head = Math.ceil(max * 0.55);
+      const tail = max - head - 1;
+      return s.slice(0, head) + '…' + s.slice(-tail);
+    }
+
+    function formatUpdated(iso) {
+      if (!iso) return t('common.empty');
+      const d = new Date(iso);
+      const now = Date.now();
+      const diffMin = Math.floor((now - d.getTime()) / 60000);
+      if (diffMin < 1) return t('subscriptions.updated_just_now');
+      if (diffMin < 60) return t('subscriptions.updated_min_ago', { min: diffMin });
+      if (diffMin < 1440) return t('subscriptions.updated_hours_ago', { h: Math.floor(diffMin / 60) });
+      return d.toLocaleString();
+    }
+
+    function renderPolicyBadge(pol) {
+      const badge = document.getElementById('policy-badge');
+      const hint = document.getElementById('policy-hint');
+      const stratMap = {
+        best_ping: t('subscriptions.strat_best_ping'),
+        first: t('subscriptions.strat_first'),
+        keep: t('subscriptions.strat_keep'),
+      };
+      const strat = stratMap[pol.reselect_strategy] || pol.reselect_strategy;
+      if (pol.auto_refresh_enabled) {
+        badge.textContent = t('subscriptions.badge_on');
+        badge.className = 'sub-policy-badge badge-on';
+        hint.textContent = t('subscriptions.auto_on', { min: pol.auto_refresh_interval_min || 60, strat });
+      } else {
+        badge.textContent = t('subscriptions.badge_off');
+        badge.className = 'sub-policy-badge badge-off';
+        hint.textContent = t('subscriptions.auto_off');
+      }
+    }
+
+    function renderSubCard(s) {
+      const card = document.createElement('article');
+      card.className = 'sub-card';
+      card.innerHTML = `
+        <div class="sub-card-head">
+          <h3 class="sub-card-title">${escapeHtml(s.name)}</h3>
+          <span class="badge sub-node-badge">${t('subscriptions.node_count', { count: s.node_count || 0 })}</span>
+        </div>
+        <div class="sub-card-url" title="${escapeHtml(s.url)}">${escapeHtml(truncateUrl(s.url))}</div>
+        <div class="sub-card-meta">
+          <span class="label">${t('subscriptions.col_updated')}:</span>
+          <time>${escapeHtml(formatUpdated(s.updated_at))}</time>
+        </div>
+        <div class="sub-card-actions">
+          <button type="button" class="secondary" data-refresh="${escapeHtml(s.id)}">${t('subscriptions.refresh')}</button>
+          <button type="button" class="danger" data-del="${escapeHtml(s.id)}">${t('common.delete')}</button>
+        </div>`;
+      return card;
+    }
+
     async function loadSubs() {
       const [data, settings] = await Promise.all([
         API.get('/api/subscriptions-list'),
@@ -49,32 +124,24 @@
       ]);
       const list = data.subscriptions || [];
       const pol = settings.subscriptions_policy || {};
-      const hint = document.getElementById('policy-hint');
-      if (hint) {
-        const stratMap = {
-          best_ping: t('subscriptions.strat_best_ping'),
-          first: t('subscriptions.strat_first'),
-          keep: t('subscriptions.strat_keep'),
-        };
-        const strat = stratMap[pol.reselect_strategy] || pol.reselect_strategy;
-        hint.textContent = pol.auto_refresh_enabled
-          ? t('subscriptions.auto_on', { min: pol.auto_refresh_interval_min || 60, strat })
-          : t('subscriptions.auto_off');
+
+      document.getElementById('stat-subs').textContent = String(list.length);
+      document.getElementById('stat-nodes').textContent = String(data.total_nodes ?? '—');
+      renderPolicyBadge(pol);
+
+      const grid = document.getElementById('subs-grid');
+      const empty = document.getElementById('subs-empty');
+      grid.innerHTML = '';
+      if (!list.length) {
+        empty.hidden = false;
+        grid.hidden = true;
+        return;
       }
-      const tbody = document.getElementById('subs-body');
-      tbody.innerHTML = '';
-      list.forEach(s => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${escapeHtml(s.name)}</td>
-          <td>${s.updated_at ? new Date(s.updated_at).toLocaleString() : t('common.empty')}</td>
-          <td>
-            <button data-refresh="${s.id}" class="secondary">${t('subscriptions.refresh')}</button>
-            <button data-del="${s.id}" class="danger">${t('common.delete')}</button>
-          </td>`;
-        tbody.appendChild(tr);
-      });
-      tbody.querySelectorAll('[data-refresh]').forEach(btn => {
+      empty.hidden = true;
+      grid.hidden = false;
+      list.forEach(s => grid.appendChild(renderSubCard(s)));
+
+      grid.querySelectorAll('[data-refresh]').forEach(btn => {
         btn.onclick = async () => {
           try {
             const res = await withButtonBusy(btn, t('common.loading'), () =>
@@ -88,7 +155,7 @@
           } catch (e) { showMsg(document.getElementById('msg'), e.message); }
         };
       });
-      tbody.querySelectorAll('[data-del]').forEach(btn => {
+      grid.querySelectorAll('[data-del]').forEach(btn => {
         btn.onclick = async () => {
           if (!confirm(t('subscriptions.confirm_delete'))) return;
           await API.send('DELETE', '/api/subscriptions/' + btn.dataset.del);
@@ -102,7 +169,8 @@
       return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
-    document.getElementById('btn-add-sub').onclick = async () => {
+    document.getElementById('add-sub-form').onsubmit = async (e) => {
+      e.preventDefault();
       const btn = document.getElementById('btn-add-sub');
       try {
         const name = document.getElementById('sub-name').value.trim() || 'Subscription';
@@ -114,6 +182,13 @@
         showMsg(document.getElementById('msg'), t('subscriptions.added_nodes', { count: res.nodes?.length || 0 }), true);
         document.getElementById('sub-url').value = '';
         await loadSubs();
+      } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+    };
+
+    document.getElementById('btn-reload-subs').onclick = async () => {
+      const btn = document.getElementById('btn-reload-subs');
+      try {
+        await withButtonBusy(btn, t('common.updating'), () => loadSubs());
       } catch (e) { showMsg(document.getElementById('msg'), e.message); }
     };
 

@@ -204,3 +204,20 @@ func (s *Server) handleAPIOnboardingNetwork(w http.ResponseWriter, r *http.Reque
 		"guest_network": st,
 	})
 }
+
+func (s *Server) handleAPIXrayStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.panel.XrayStatus())
+}
+
+func (s *Server) handleAPIXrayUpdate(w http.ResponseWriter, r *http.Request) {
+	var req service.UpdateXrayRequest
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+	result := s.panel.UpdateXray(r.Context(), req)
+	status := http.StatusOK
+	if !result.OK {
+		status = http.StatusBadRequest
+	}
+	writeJSON(w, status, result)
+}
