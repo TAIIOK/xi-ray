@@ -85,3 +85,20 @@ GitHub Actions (`.github/workflows/release.yml`) при push tag `v*.*.*`:
 ```bash
 scripts/test-update.sh
 ```
+
+## Lab VM (Multipass)
+
+Эмулятор роутера для тестов panel / Xray / iptables без физического BE7000:
+
+```bash
+make lab-up          # одна команда: VM + panel + Xray + сеть
+make lab-deploy      # обновить panel на уже поднятой VM
+make lab-deploy-full # полный redeploy без пересоздания VM
+make lab-status      # сервисы, iptables, SOCKS
+make lab-guest-test  # гостевой netns 192.168.33.10
+make lab-shell       # shell в VM
+make lab-down        # остановить VM
+make lab-purge       # удалить VM
+```
+
+Подробнее: [lab/README.md](../lab/README.md)

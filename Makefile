@@ -1,4 +1,5 @@
-.PHONY: build build-arm64 test tidy run install uninstall uninstall-yes install-autostart release-bundle tag-release deploy
+.PHONY: build build-arm64 test tidy run install uninstall uninstall-yes install-autostart release-bundle tag-release deploy \
+	lab-up lab-down lab-purge lab-shell lab-status lab-guest-test lab-deploy lab-deploy-full
 
 export GOTOOLCHAIN ?= go1.22.10
 
@@ -49,3 +50,27 @@ tag-release:
 	@test -n "$(VERSION)" || (echo "Usage: make tag-release VERSION=v1.0.0" >&2; exit 1)
 	git tag $(VERSION)
 	git push origin $(VERSION)
+
+lab-up:
+	sh lab/scripts/lab-up.sh
+
+lab-down:
+	sh lab/scripts/lab-down.sh
+
+lab-purge:
+	LAB_PURGE=1 sh lab/scripts/lab-down.sh
+
+lab-shell:
+	sh lab/scripts/lab-shell.sh
+
+lab-status:
+	sh lab/scripts/lab-status.sh
+
+lab-guest-test:
+	sh lab/scripts/lab-guest-test.sh
+
+lab-deploy:
+	sh lab/scripts/lab-deploy.sh
+
+lab-deploy-full:
+	sh lab/scripts/lab-deploy.sh --full
