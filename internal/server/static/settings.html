@@ -493,13 +493,17 @@
     document.getElementById('btn-upd-check').onclick = async () => {
       const btn = document.getElementById('btn-upd-check');
       try {
-        document.getElementById('upd-phase').textContent = 'Проверка…';
-        const st = await withButtonBusy(btn, 'Проверка…', () => API.get('/api/update/check'));
+        const st = await withButtonBusy(btn, t('update.checking'), () =>
+          API.get('/api/update/check', { timeoutMs: 45000 })
+        );
         if (st.available) lastAvailable = st.available;
         renderUpdate(st);
         const avail = updateAvailable(st);
-        showMsg(document.getElementById('msg'), avail ? 'Доступна версия ' + avail : 'Обновлений нет', true);
-      } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+        showMsg(document.getElementById('msg'), avail ? t('update.available', { version: avail }) : t('update.none'), true);
+      } catch (err) {
+        showMsg(document.getElementById('msg'), err.message);
+        refreshUpdate().catch(() => {});
+      }
     };
 
     document.getElementById('btn-upd-download').onclick = async () => {

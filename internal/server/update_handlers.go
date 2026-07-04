@@ -1,8 +1,12 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"time"
+
+	"github.com/taiiok/xiaomi-vless/internal/update"
 )
 
 func (s *Server) handleAPIUpdateStatus(w http.ResponseWriter, r *http.Request) {
@@ -15,7 +19,9 @@ func (s *Server) handleAPIUpdateStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAPIUpdateCheck(w http.ResponseWriter, r *http.Request) {
-	st, err := s.update.Check(r.Context())
+	ctx, cancel := context.WithTimeout(r.Context(), update.CheckReleaseTimeout+5*time.Second)
+	defer cancel()
+	st, err := s.update.Check(ctx)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return

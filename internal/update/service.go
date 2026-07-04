@@ -32,7 +32,8 @@ type StatusResponse struct {
 type Service struct {
 	layout         Layout
 	store          *StateStore
-	client         *http.Client
+	checkClient    *http.Client
+	downloadClient *http.Client
 	cfg            func() config.PanelConfig
 	PostUpdateHook func(context.Context) error
 }
@@ -40,10 +41,11 @@ type Service struct {
 func NewService(home, configPath string, cfg func() config.PanelConfig) *Service {
 	layout := LayoutForHome(home, configPath)
 	return &Service{
-		layout: layout,
-		store:  NewStateStore(layout.StatePath),
-		client: &http.Client{Timeout: 15 * time.Minute},
-		cfg:    cfg,
+		layout:         layout,
+		store:          NewStateStore(layout.StatePath),
+		checkClient:    CheckHTTPClient(),
+		downloadClient: DownloadHTTPClient(),
+		cfg:            cfg,
 	}
 }
 
@@ -76,7 +78,7 @@ func (s *Service) Status(ctx context.Context) (StatusResponse, error) {
 	} else if s.layout.HasPrevious() {
 		resp.PreviousVersion = "previous"
 	}
-	if st.TargetVersion != "" && trimVersion(st.TargetVersion) != trimVersion(version.Version) {
+	if st.TargetVersion != "" && IsUpdateAvailable(st.TargetVersion, version.Version) {
 		resp.Available = &ReleaseInfo{
 			Version:     st.TargetVersion,
 			DownloadURL: st.DownloadURL,
@@ -89,6 +91,9 @@ func (s *Service) Check(ctx context.Context) (StatusResponse, error) {
 	if err := s.layout.EnsureDirs(); err != nil {
 		return StatusResponse{}, err
 	}
+	ctx, cancel := context.WithTimeout(ctx, CheckReleaseTimeout)
+	defer cancel()
+
 	st, err := s.store.Load()
 	if err != nil {
 		return StatusResponse{}, err
@@ -97,7 +102,7 @@ func (s *Service) Check(ctx context.Context) (StatusResponse, error) {
 		return s.Status(ctx)
 	}
 
-	rel, err := FetchLatestRelease(s.client)
+	rel, err := FetchLatestRelease(ctx, s.checkClient)
 	if err != nil {
 		return StatusResponse{}, err
 	}
@@ -115,7 +120,9 @@ func (s *Service) Check(ctx context.Context) (StatusResponse, error) {
 	if err != nil {
 		return StatusResponse{}, err
 	}
-	resp.Available = &rel
+	if IsUpdateAvailable(rel.Version, version.Version) {
+		resp.Available = &rel
+	}
 	return resp, nil
 }
 
@@ -129,7 +136,9 @@ func (s *Service) Download(ctx context.Context, targetVersion string) (StatusRes
 	}
 
 	if st.DownloadURL == "" || (targetVersion != "" && trimVersion(targetVersion) != trimVersion(st.TargetVersion)) {
-		rel, err := FetchLatestRelease(s.client)
+		checkCtx, cancel := context.WithTimeout(ctx, CheckReleaseTimeout)
+		rel, err := FetchLatestRelease(checkCtx, s.checkClient)
+		cancel()
 		if err != nil {
 			return StatusResponse{}, err
 		}
@@ -141,8 +150,8 @@ func (s *Service) Download(ctx context.Context, targetVersion string) (StatusRes
 		st.PreviousVersion = version.Version
 	}
 
-	if trimVersion(st.TargetVersion) == trimVersion(version.Version) {
-		return StatusResponse{}, fmt.Errorf("already running version %s", version.Version)
+	if !IsUpdateAvailable(st.TargetVersion, version.Version) {
+		return StatusResponse{}, fmt.Errorf("already running version %s (release %s is not newer)", version.Version, st.TargetVersion)
 	}
 
 	st.Phase = PhaseDownloading
@@ -154,7 +163,7 @@ func (s *Service) Download(ctx context.Context, targetVersion string) (StatusRes
 
 	var dlErr error
 	for attempt := 0; attempt < maxDownloadAttempts; attempt++ {
-		st, dlErr = DownloadArchive(ctx, s.client, st.DownloadURL, st.ArchivePath, st, func(p State) {
+		st, dlErr = DownloadArchive(ctx, s.downloadClient, st.DownloadURL, st.ArchivePath, st, func(p State) {
 			_ = s.store.Save(p)
 		})
 		if dlErr == nil {

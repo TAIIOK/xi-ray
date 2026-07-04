@@ -22,6 +22,7 @@
     "empty": "—",
     "unknown": "unknown",
     "ms": "ms",
+    "timeout": "Server request timed out",
     "confirm": "Confirm",
     "yes": "Yes",
     "no": "No"

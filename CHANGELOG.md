@@ -20,6 +20,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Subscriptions API (`/api/subscriptions-list`) now includes `node_count` per subscription and `total_nodes`
 - Settings panel update section has anchor `#panel-update` for deep links from dashboard
 
+### Fixed
+
+- Panel update check no longer hangs indefinitely (30s timeout, IPv4-first dial to GitHub API)
+- Update banner and settings only offer releases **newer** than the running version (semver; ignores `-dirty` suffix)
+- Dashboard no longer triggers GitHub check on every page load
+
 ### Included from pre-release work (since v0.2.0)
 
 - i18n (ru/en) across UI

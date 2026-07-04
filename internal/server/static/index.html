@@ -198,10 +198,7 @@
       const banner = document.getElementById('panel-update-banner');
       const textEl = document.getElementById('panel-update-banner-text');
       try {
-        let st = await API.get('/api/update/status');
-        if (!updateAvailable(st) && st.phase === 'idle') {
-          try { st = await API.get('/api/update/check'); } catch (_) { /* offline */ }
-        }
+        let st = await API.get('/api/update/status', { timeoutMs: 10000 });
         const avail = updateAvailable(st);
         if (avail && st.phase === 'idle') {
           textEl.textContent = t('dashboard.update_available', { version: avail, current: st.current_version || 'dev' });

@@ -3,18 +3,40 @@ const API = {
     const lang = typeof getLang === 'function' ? getLang() : 'ru';
     return { 'Accept-Language': lang };
   },
-  async get(path) {
-    const r = await fetch(path, { headers: this.langHeaders() });
+  async fetch(path, options = {}) {
+    const timeoutMs = options.timeoutMs ?? 120000;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      return await fetch(path, {
+        method: options.method || 'GET',
+        headers: {
+          ...this.langHeaders(),
+          ...(options.headers || {}),
+        },
+        body: options.body,
+        signal: ctrl.signal,
+      });
+    } catch (e) {
+      if (e && e.name === 'AbortError') {
+        const msg = typeof t === 'function' ? t('common.timeout') : 'Request timeout';
+        throw new Error(msg);
+      }
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  },
+  async get(path, options = {}) {
+    const r = await this.fetch(path, options);
     if (!r.ok) throw new Error(await r.text());
     return r.json();
   },
-  async send(method, path, body) {
-    const r = await fetch(path, {
+  async send(method, path, body, options = {}) {
+    const r = await this.fetch(path, {
+      ...options,
       method,
-      headers: {
-        ...this.langHeaders(),
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
-      },
+      headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) },
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = await r.json().catch(() => ({}));
@@ -77,6 +99,28 @@ async function withButtonBusy(btn, busyText, fn) {
   }
 }
 
+function parseVersionCore(v) {
+  const core = String(v || '').replace(/^v/i, '').split(/[-+]/)[0];
+  const parts = core.split('.').map(p => {
+    const n = parseInt(p, 10);
+    return Number.isFinite(n) ? n : NaN;
+  });
+  if (parts.length < 2 || parts.some(n => Number.isNaN(n))) return null;
+  while (parts.length < 3) parts.push(0);
+  return parts.slice(0, 3);
+}
+
+function versionNewer(a, b) {
+  const va = parseVersionCore(a);
+  const vb = parseVersionCore(b);
+  if (!va) return false;
+  if (!vb) return true;
+  for (let i = 0; i < 3; i++) {
+    if (va[i] !== vb[i]) return va[i] > vb[i];
+  }
+  return false;
+}
+
 function trimVersion(v) {
   return String(v || '').replace(/^v/i, '');
 }
@@ -85,7 +129,7 @@ function updateAvailable(st) {
   if (!st) return null;
   const ver = st.available?.version || st.target_version;
   if (!ver) return null;
-  return trimVersion(ver) !== trimVersion(st.current_version) ? ver : null;
+  return versionNewer(ver, st.current_version) ? ver : null;
 }
 
 function guestNetworkClass(gn) {

@@ -1,6 +1,7 @@
 package update
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -41,12 +42,15 @@ func Repo() string {
 	return repoDefault
 }
 
-func FetchLatestRelease(client *http.Client) (ReleaseInfo, error) {
+func FetchLatestRelease(ctx context.Context, client *http.Client) (ReleaseInfo, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if client == nil {
-		client = &http.Client{Timeout: 2 * time.Minute}
+		client = CheckHTTPClient()
 	}
 	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", Repo())
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return ReleaseInfo{}, err
 	}
@@ -55,7 +59,10 @@ func FetchLatestRelease(client *http.Client) (ReleaseInfo, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return ReleaseInfo{}, err
+		if ctx.Err() != nil {
+			return ReleaseInfo{}, fmt.Errorf("github api timeout: %w", ctx.Err())
+		}
+		return ReleaseInfo{}, fmt.Errorf("github api: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
