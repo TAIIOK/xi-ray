@@ -30,6 +30,7 @@ func main() {
 	updateGetPhase := flag.Bool("update-get-phase", false, "updater: print phase")
 	updateApply := flag.Bool("update-apply", false, "updater: apply staged bundle")
 	updateRollback := flag.Bool("update-rollback", false, "updater: rollback to panel.previous")
+	postUpdate := flag.Bool("post-update", false, "run post-update migration and apply VPN stack")
 	flag.Parse()
 
 	if *showVersion {
@@ -68,7 +69,18 @@ func main() {
 		log.Fatalf("load config: %v", err)
 	}
 
-	if mode := strings.TrimSpace(*resetMode); mode != "" {
+	if *postUpdate {
+		panel := service.NewPanelService(store)
+		setup.BootstrapOnStart(store, *configPath, false)
+		if err := panel.RunPostUpdate(context.Background()); err != nil {
+			log.Fatalf("post-update: %v", err)
+		}
+		log.Printf("post-update complete")
+		return
+	}
+
+	if *resetMode != "" {
+		mode := strings.TrimSpace(*resetMode)
 		if err := service.ResetPanelConfig(store, mode); err != nil {
 			log.Fatalf("reset: %v", err)
 		}
@@ -92,6 +104,7 @@ func main() {
 	setupPanelLogging(cfg)
 
 	upd := update.NewService(cfg.Paths.PanelDataDir, *configPath, store.Get)
+	upd.PostUpdateHook = panel.RunPostUpdate
 	if err := upd.ResumeOrVerify(context.Background()); err != nil {
 		log.Printf("update resume: %v", err)
 	}

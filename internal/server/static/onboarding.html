@@ -7,10 +7,7 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="page-onboarding">
-  <header>
-    <strong>Xiaomi VLESS Panel — первичная настройка</strong>
-    <nav><a href="/logout">Выход</a></nav>
-  </header>
+  <header id="app-header"></header>
   <main>
     <div id="msg" class="msg" hidden></div>
     <div id="ready-banner" class="msg ok" hidden></div>
@@ -64,7 +61,21 @@
     </div>
 
     <div class="card">
-      <h2>Шаг 3 — Сервер VPN</h2>
+      <h2>Шаг 3 — Гостевая сеть</h2>
+      <p class="label">Panel перехватывает трафик только с гостевой Wi‑Fi. По умолчанию подсеть Xiaomi — <code>192.168.33.0/24</code> (шлюз <code>192.168.33.1</code> на <code>br-guest</code>). Если у вас другая — укажите и проверьте.</p>
+      <div class="field">
+        <label class="label" for="guest_subnet">Guest subnet (CIDR)</label>
+        <div class="inline-actions">
+          <input id="guest_subnet" placeholder="192.168.33.0/24" style="flex:1">
+          <button type="button" id="btn-guest-check" class="secondary">Проверить</button>
+          <button type="button" id="btn-guest-suggest" class="secondary">Подставить с роутера</button>
+        </div>
+      </div>
+      <div id="guest-network-status" class="setup-log" hidden></div>
+    </div>
+
+    <div class="card">
+      <h2>Шаг 4 — Сервер VPN</h2>
       <p id="nodes-info" class="label">—</p>
 
       <div class="field">
@@ -98,7 +109,7 @@
     </div>
 
     <div class="card onboarding-footer">
-      <h2>Шаг 4 — Завершение</h2>
+      <h2>Шаг 5 — Завершение</h2>
       <label class="checkbox-field">
         <input type="checkbox" id="apply-now" checked>
         <span>Применить конфиг Xray и перезапустить VPN после завершения настройки</span>
@@ -109,6 +120,7 @@
       </div>
     </div>
   </main>
+  <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
   <script>
     function defaultUSBHome() {
@@ -181,6 +193,25 @@
     }
 
     let onboardingSelection = { mode: 'single', active_node_ids: [] };
+    let lastGuestNetwork = null;
+
+    function renderGuestNetwork(gn) {
+      lastGuestNetwork = gn || null;
+      renderGuestNetworkStatus(document.getElementById('guest-network-status'), gn, escapeHtml);
+    }
+
+    async function checkGuestNetwork(save) {
+      const subnet = document.getElementById('guest_subnet').value.trim();
+      if (save) {
+        const res = await API.send('PUT', '/api/onboarding/network', { guest_subnet: subnet });
+        if (res.guest_subnet) document.getElementById('guest_subnet').value = res.guest_subnet;
+        renderGuestNetwork(res.guest_network);
+        return res.guest_network;
+      }
+      const gn = await API.send('POST', '/api/network/guest-check', { guest_subnet: subnet });
+      renderGuestNetwork(gn);
+      return gn;
+    }
 
     function renderVlessNodes(nodes, selection) {
       const vless = (nodes || []).filter(n => (n.protocol || '').toLowerCase() === 'vless');
@@ -234,6 +265,8 @@
       onboardingSelection = st.selection || onboardingSelection;
       renderVlessNodes(st.nodes, st.selection);
       updateNodesInfo(st);
+      if (st.guest_subnet) document.getElementById('guest_subnet').value = st.guest_subnet;
+      renderGuestNetwork(st.guest_network);
     }
 
     document.getElementById('btn-usb-template').onclick = () => {
@@ -319,6 +352,30 @@
       }
     };
 
+    document.getElementById('btn-guest-check').onclick = async () => {
+      try {
+        await checkGuestNetwork(false);
+        showMsg(document.getElementById('msg'), 'Проверка гостевой сети выполнена', lastGuestNetwork?.ok);
+      } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+    };
+
+    document.getElementById('btn-guest-suggest').onclick = async () => {
+      try {
+        const gn = await checkGuestNetwork(false);
+        if (gn.suggested_subnet) {
+          document.getElementById('guest_subnet').value = gn.suggested_subnet;
+          await checkGuestNetwork(true);
+          showMsg(document.getElementById('msg'), 'Подсеть подставлена с роутера', true);
+        } else if (gn.detected_subnet) {
+          document.getElementById('guest_subnet').value = gn.detected_subnet;
+          await checkGuestNetwork(true);
+          showMsg(document.getElementById('msg'), 'Подсеть подставлена с роутера', true);
+        } else {
+          showMsg(document.getElementById('msg'), 'Не удалось определить подсеть на br-guest');
+        }
+      } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+    };
+
     document.getElementById('btn-import').onclick = async () => {
       const input = document.getElementById('import-input').value.trim();
       if (!input) {
@@ -371,11 +428,20 @@
       const pw2 = document.getElementById('password2').value;
       if (pw.length < 6) { showMsg(document.getElementById('msg'), 'Пароль минимум 6 символов'); return; }
       if (pw !== pw2) { showMsg(document.getElementById('msg'), 'Пароли не совпадают'); return; }
+      let gn = lastGuestNetwork;
+      try {
+        gn = await checkGuestNetwork(false);
+      } catch (_) { /* use cached */ }
+      if (guestNetworkNeedsConfirm(gn)) {
+        const msg = 'Гостевая сеть не подтверждена. Продолжение может привести к потере интернета на основной сети. Вы уверены?';
+        if (!confirm(msg)) return;
+      }
       try {
         const res = await API.send('POST', '/api/onboarding/complete', {
           username: document.getElementById('username').value,
           password: pw,
           paths: pathsFromForm(),
+          guest_subnet: document.getElementById('guest_subnet').value.trim(),
           apply: document.getElementById('apply-now').checked,
         });
         showMsg(document.getElementById('msg'), res.message, res.ok);
@@ -395,7 +461,11 @@
       return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
-    loadStatus().catch(e => showMsg(document.getElementById('msg'), e.message));
+    initI18n().then(() => {
+      renderOnboardingHeader();
+      applyI18n();
+      loadStatus().catch(e => showMsg(document.getElementById('msg'), e.message));
+    });
   </script>
 </body>
 </html>

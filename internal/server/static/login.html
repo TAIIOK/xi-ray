@@ -3,37 +3,43 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Login — Xiaomi VLESS</title>
+  <title data-i18n="login.title">Вход — Xiaomi VLESS</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="login-page">
   <div class="login-shell">
+    <div id="login-lang" class="login-lang"></div>
     <div class="login-brand">
       <div class="login-logo">XV</div>
-      <h1>Xiaomi VLESS Panel</h1>
-      <p class="login-tagline">Управление VPN для гостевой Wi‑Fi</p>
+      <h1 data-i18n="brand">Xiaomi VLESS Panel</h1>
+      <p class="login-tagline" data-i18n="login.tagline">Управление VPN для гостевой Wi‑Fi</p>
     </div>
 
     <div class="login-wrap card">
-      <h2>Вход</h2>
-      <p class="label">Панель на роутере BE7000</p>
-      <div id="err" class="msg error" hidden>Неверный логин или пароль</div>
+      <h2 data-i18n="login.heading">Вход</h2>
+      <p class="label" data-i18n="login.router_hint">Панель на роутере BE7000</p>
+      <div id="err" class="msg error" hidden data-i18n="login.error">Неверный логин или пароль</div>
       <form method="post" action="/login" class="login-form">
         <div class="field">
-          <label class="label" for="username">Логин</label>
+          <label class="label" for="username" data-i18n="login.username">Логин</label>
           <input id="username" name="username" required autocomplete="username" placeholder="admin">
         </div>
         <div class="field">
-          <label class="label" for="password">Пароль</label>
+          <label class="label" for="password" data-i18n="login.password">Пароль</label>
           <input id="password" name="password" type="password" required autocomplete="current-password" placeholder="••••••••">
         </div>
-        <button type="submit" class="login-submit">Войти</button>
+        <button type="submit" class="login-submit" data-i18n="login.submit">Войти</button>
       </form>
-      <p class="login-hint label">По умолчанию: admin / admin — смените после первого входа</p>
+      <p class="login-hint label" data-i18n="login.default_hint">По умолчанию: admin / admin — смените после первого входа</p>
     </div>
   </div>
+  <script src="/static/i18n.js"></script>
   <script>
-    if (location.search.includes('error=1')) document.getElementById('err').hidden = false;
+    initI18n().then(() => {
+      applyI18n();
+      renderLoginLangSwitch();
+      if (location.search.includes('error=1')) document.getElementById('err').hidden = false;
+    });
   </script>
 </body>
 </html>

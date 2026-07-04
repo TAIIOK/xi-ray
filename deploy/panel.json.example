@@ -42,6 +42,11 @@
     "interval_sec": 60,
     "refresh_subscriptions_on_outage": true
   },
+  "fail_open": {
+    "enabled": true,
+    "restore_on_recovery": true,
+    "marker_path": "/data/xiaomi-vless-failopen"
+  },
   "subscriptions_policy": {
     "auto_refresh_enabled": true,
     "auto_refresh_interval_min": 60,

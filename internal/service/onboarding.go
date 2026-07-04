@@ -6,24 +6,27 @@ import (
 	"strings"
 
 	"github.com/taiiok/xiaomi-vless/internal/config"
+	"github.com/taiiok/xiaomi-vless/internal/network"
 	"github.com/taiiok/xiaomi-vless/internal/setup"
 	"github.com/taiiok/xiaomi-vless/internal/subscription"
 )
 
 type OnboardingStatus struct {
-	Required            bool              `json:"required"`
-	OnboardingCompleted bool              `json:"onboarding_completed"`
-	DefaultPassword     bool              `json:"default_password"`
-	Paths               config.Paths      `json:"paths"`
-	PathChecks          []setup.PathCheck `json:"path_checks"`
-	USBMounts           []setup.USBMount  `json:"usb_mounts"`
-	Ready               bool              `json:"ready"`
-	XrayVersion         string            `json:"xray_version,omitempty"`
-	HasNodes            bool              `json:"has_nodes"`
-	HasActiveSelection  bool              `json:"has_active_selection"`
-	VlessCount          int               `json:"vless_count"`
-	Nodes               []config.Node     `json:"nodes,omitempty"`
-	Selection           config.Selection  `json:"selection"`
+	Required            bool                    `json:"required"`
+	OnboardingCompleted bool                    `json:"onboarding_completed"`
+	DefaultPassword     bool                    `json:"default_password"`
+	Paths               config.Paths            `json:"paths"`
+	PathChecks          []setup.PathCheck       `json:"path_checks"`
+	USBMounts           []setup.USBMount        `json:"usb_mounts"`
+	Ready               bool                    `json:"ready"`
+	XrayVersion         string                  `json:"xray_version,omitempty"`
+	HasNodes            bool                    `json:"has_nodes"`
+	HasActiveSelection  bool                    `json:"has_active_selection"`
+	VlessCount          int                     `json:"vless_count"`
+	Nodes               []config.Node           `json:"nodes,omitempty"`
+	Selection           config.Selection        `json:"selection"`
+	GuestSubnet         string                  `json:"guest_subnet"`
+	GuestNetwork        network.GuestNetworkStatus `json:"guest_network"`
 }
 
 func (p *PanelService) NeedsOnboarding() bool {
@@ -34,10 +37,47 @@ func (p *PanelService) NeedsOnboarding() bool {
 	return !cfg.Setup.OnboardingCompleted
 }
 
+func guestSubnetFromConfig(cfg config.PanelConfig) string {
+	subnet := cfg.Network.GuestSubnet
+	if subnet == "" {
+		subnet = cfg.Iptables.GuestSubnet
+	}
+	if subnet == "" {
+		subnet = config.DefaultGuestSubnet
+	}
+	return subnet
+}
+
+func (p *PanelService) CheckGuestNetwork(subnet string) network.GuestNetworkStatus {
+	if subnet == "" {
+		subnet = guestSubnetFromConfig(p.store.Get())
+	}
+	if norm, err := config.NormalizeGuestSubnet(subnet); err == nil {
+		subnet = norm
+	}
+	return network.DetectGuest(subnet)
+}
+
+func (p *PanelService) UpdateOnboardingNetwork(guestSubnet string) (network.GuestNetworkStatus, error) {
+	norm, err := config.NormalizeGuestSubnet(guestSubnet)
+	if err != nil {
+		return network.GuestNetworkStatus{}, err
+	}
+	if err := p.store.Update(func(cfg *config.PanelConfig) error {
+		cfg.Network.GuestSubnet = norm
+		cfg.Iptables.GuestSubnet = norm
+		return nil
+	}); err != nil {
+		return network.GuestNetworkStatus{}, err
+	}
+	return p.CheckGuestNetwork(norm), nil
+}
+
 func (p *PanelService) GetOnboardingStatus() OnboardingStatus {
 	cfg := p.store.Get()
 	checks := setup.VerifyPaths(cfg.Paths)
 	vless := subscription.FilterByProtocol(cfg.Nodes, "vless")
+	guestSubnet := guestSubnetFromConfig(cfg)
 	return OnboardingStatus{
 		Required:            p.NeedsOnboarding(),
 		OnboardingCompleted: cfg.Setup.OnboardingCompleted,
@@ -52,6 +92,8 @@ func (p *PanelService) GetOnboardingStatus() OnboardingStatus {
 		VlessCount:          len(vless),
 		Nodes:               cfg.Nodes,
 		Selection:           cfg.Selection,
+		GuestSubnet:         guestSubnet,
+		GuestNetwork:        p.CheckGuestNetwork(guestSubnet),
 	}
 }
 
@@ -137,10 +179,11 @@ func (p *PanelService) DownloadXrayOnboarding(ctx context.Context, req DownloadX
 }
 
 type CompleteOnboardingRequest struct {
-	Username string        `json:"username"`
-	Password string        `json:"password"`
-	Paths    *config.Paths `json:"paths,omitempty"`
-	Apply    bool          `json:"apply"`
+	Username    string        `json:"username"`
+	Password    string        `json:"password"`
+	Paths       *config.Paths `json:"paths,omitempty"`
+	GuestSubnet string        `json:"guest_subnet,omitempty"`
+	Apply       bool          `json:"apply"`
 }
 
 type CompleteOnboardingResult struct {
@@ -158,6 +201,11 @@ func (p *PanelService) CompleteOnboarding(ctx context.Context, req CompleteOnboa
 	}
 	if req.Paths != nil {
 		if _, err := p.UpdateOnboardingPaths(*req.Paths); err != nil {
+			return nil, err
+		}
+	}
+	if strings.TrimSpace(req.GuestSubnet) != "" {
+		if _, err := p.UpdateOnboardingNetwork(req.GuestSubnet); err != nil {
 			return nil, err
 		}
 	}

@@ -3,6 +3,7 @@ package update
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -29,10 +30,11 @@ type StatusResponse struct {
 }
 
 type Service struct {
-	layout Layout
-	store  *StateStore
-	client *http.Client
-	cfg    func() config.PanelConfig
+	layout         Layout
+	store          *StateStore
+	client         *http.Client
+	cfg            func() config.PanelConfig
+	PostUpdateHook func(context.Context) error
 }
 
 func NewService(home, configPath string, cfg func() config.PanelConfig) *Service {
@@ -321,6 +323,15 @@ func (s *Service) ResumeOrVerify(ctx context.Context) error {
 	}
 }
 
+func (s *Service) runPostUpdate(ctx context.Context) {
+	if s.PostUpdateHook == nil {
+		return
+	}
+	if err := s.PostUpdateHook(ctx); err != nil {
+		log.Printf("post-update hook: %v", err)
+	}
+}
+
 func (s *Service) runHealthCheck(ctx context.Context) error {
 	st, err := s.store.Load()
 	if err != nil {
@@ -355,12 +366,18 @@ func (s *Service) StartHealthCheckIfNeeded(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	if st.Phase == PhaseRestarting {
+	switch st.Phase {
+	case PhaseRestarting:
 		st.Phase = PhaseHealthCheck
 		_ = s.store.Save(st)
-		go func() {
-			time.Sleep(2 * time.Second)
-			_ = s.runHealthCheck(context.Background())
-		}()
+		go s.runPostUpdateAndHealthCheck()
+	case PhaseHealthCheck:
+		go s.runPostUpdateAndHealthCheck()
 	}
+}
+
+func (s *Service) runPostUpdateAndHealthCheck() {
+	time.Sleep(2 * time.Second)
+	s.runPostUpdate(context.Background())
+	_ = s.runHealthCheck(context.Background())
 }

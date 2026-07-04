@@ -10,15 +10,17 @@ import (
 	"time"
 
 	"github.com/taiiok/xiaomi-vless/internal/config"
+	"github.com/taiiok/xiaomi-vless/internal/network"
 	"github.com/taiiok/xiaomi-vless/internal/xray"
 )
 
 type StatusService struct {
-	store *config.Store
+	store    *config.Store
+	failOpen *FailOpenService
 }
 
-func NewStatusService(store *config.Store) *StatusService {
-	return &StatusService{store: store}
+func NewStatusService(store *config.Store, failOpen *FailOpenService) *StatusService {
+	return &StatusService{store: store, failOpen: failOpen}
 }
 
 type StatusResponse struct {
@@ -34,8 +36,11 @@ type StatusResponse struct {
 	IptablesUDP     IptablesChain     `json:"iptables_udp"`
 	Observatory     ObservatoryStatus `json:"observatory"`
 	ObservatoryLive bool              `json:"observatory_live"`
-	WatchdogAlert   string            `json:"watchdog_alert,omitempty"`
-	CheckedAt       time.Time         `json:"checked_at"`
+	WatchdogAlert   string                     `json:"watchdog_alert,omitempty"`
+	WatchdogActive  bool                       `json:"watchdog_active"`
+	FailOpenActive  bool                       `json:"fail_open_active"`
+	GuestNetwork    network.GuestNetworkStatus `json:"guest_network"`
+	CheckedAt       time.Time                  `json:"checked_at"`
 	Message         string            `json:"message,omitempty"`
 }
 
@@ -57,6 +62,7 @@ func (s *StatusService) GetStatus(ctx context.Context) StatusResponse {
 		WatchdogAlert: cfg.Watchdog.LastAlert,
 		IptablesTCP:   parseIptablesChain("nat", "XRAY_GUEST_TCP"),
 		IptablesUDP:   parseIptablesChain("mangle", "XRAY_GUEST_UDP"),
+		GuestNetwork:  network.DetectGuest(guestSubnetFromConfig(cfg)),
 	}
 
 	start := time.Now()
@@ -80,6 +86,11 @@ func (s *StatusService) GetStatus(ctx context.Context) StatusResponse {
 		resp.VPNConnected = true
 		resp.ExitIP = exitIP
 		resp.ProbeLatencyMs = probeLatency
+	}
+
+	resp.WatchdogActive, _ = DetectWatchdogOutage(resp.XrayRunning, resp.VPNConnected, resp.Observatory)
+	if s.failOpen != nil {
+		resp.FailOpenActive = s.failOpen.IsActive()
 	}
 
 	switch {
@@ -264,55 +275,87 @@ func (s *StatusService) GetObservatory(ctx context.Context) ObservatoryStatus {
 	return out
 }
 
-func (s *StatusService) ProbeNodes(ctx context.Context, nodeIDs []string) error {
-	obs := s.GetObservatory(ctx)
-	if obs.Live {
-		return s.store.Update(func(cfg *config.PanelConfig) error {
-			ids := map[string]struct{}{}
-			for _, id := range nodeIDs {
-				ids[id] = struct{}{}
-			}
-			byID := map[string]NodeHealth{}
-			for _, n := range obs.Nodes {
-				byID[n.ID] = n
-			}
-			for i, node := range cfg.Nodes {
-				if len(ids) > 0 {
-					if _, ok := ids[node.ID]; !ok {
-						continue
-					}
-				}
-				if live, ok := byID[node.ID]; ok {
-					cfg.Nodes[i].LastLatencyMs = live.LatencyMs
-					cfg.Nodes[i].LastHealth = live.Health
-				}
-			}
-			return nil
-		})
+func probeNodeIDFilter(nodeIDs []string) map[string]struct{} {
+	ids := map[string]struct{}{}
+	for _, id := range nodeIDs {
+		ids[id] = struct{}{}
 	}
+	return ids
+}
 
-	return s.store.Update(func(cfg *config.PanelConfig) error {
-		ids := map[string]struct{}{}
-		for _, id := range nodeIDs {
-			ids[id] = struct{}{}
-		}
-		for i, node := range cfg.Nodes {
+func (s *StatusService) ProbeNodes(ctx context.Context, nodeIDs []string) error {
+	cfg := s.store.Get()
+	return s.store.Update(func(c *config.PanelConfig) error {
+		ids := probeNodeIDFilter(nodeIDs)
+		for i, node := range c.Nodes {
 			if len(ids) > 0 {
 				if _, ok := ids[node.ID]; !ok {
 					continue
 				}
 			}
-			start := time.Now()
-			socks := fmt.Sprintf("socks5h://127.0.0.1:%d", cfg.Iptables.SOCKSPort)
-			_, err := SOCKSProbeAt(ctx, socks, "https://www.google.com/generate_204")
-			latency := int(time.Since(start).Milliseconds())
-			cfg.Nodes[i].LastLatencyMs = latency
-			if err != nil {
-				cfg.Nodes[i].LastHealth = "dead"
-			} else {
-				cfg.Nodes[i].LastHealth = "ok"
+			tcpMs, tcpHealth := probeNodeTCP(ctx, node)
+			c.Nodes[i].LastLatencyMs = tcpMs
+			c.Nodes[i].LastHealth = tcpHealth
+
+			xrayMs, xrayHealth := s.probeNodeXray(ctx, cfg, node)
+			c.Nodes[i].LastXrayLatencyMs = xrayMs
+			c.Nodes[i].LastXrayHealth = xrayHealth
+		}
+		return nil
+	})
+}
+
+func probeNodeTCP(ctx context.Context, node config.Node) (latencyMs int, health string) {
+	if node.Address == "" || node.Port <= 0 {
+		return 0, "dead"
+	}
+	ms, err := TCPLatencyMs(ctx, node.Address, node.Port)
+	if err != nil {
+		return 0, "dead"
+	}
+	return ms, "ok"
+}
+
+type PingNodeResult struct {
+	LatencyMs      int    `json:"latency_ms"`
+	Health         string `json:"health"`
+	XrayLatencyMs  int    `json:"xray_latency_ms,omitempty"`
+	XrayHealth     string `json:"xray_health"`
+}
+
+func (s *StatusService) PingNode(ctx context.Context, nodeID string) (PingNodeResult, error) {
+	cfg := s.store.Get()
+	var node config.Node
+	found := false
+	for _, n := range cfg.Nodes {
+		if n.ID == nodeID {
+			node = n
+			found = true
+			break
+		}
+	}
+	if !found {
+		return PingNodeResult{}, fmt.Errorf("node not found")
+	}
+	tcpMs, tcpHealth := probeNodeTCP(ctx, node)
+	xrayMs, xrayHealth := s.probeNodeXray(ctx, cfg, node)
+	result := PingNodeResult{
+		LatencyMs:     tcpMs,
+		Health:        tcpHealth,
+		XrayLatencyMs: xrayMs,
+		XrayHealth:    xrayHealth,
+	}
+	_ = s.store.Update(func(c *config.PanelConfig) error {
+		for i, n := range c.Nodes {
+			if n.ID == nodeID {
+				c.Nodes[i].LastLatencyMs = result.LatencyMs
+				c.Nodes[i].LastHealth = result.Health
+				c.Nodes[i].LastXrayLatencyMs = result.XrayLatencyMs
+				c.Nodes[i].LastXrayHealth = result.XrayHealth
+				break
 			}
 		}
 		return nil
 	})
+	return result, nil
 }

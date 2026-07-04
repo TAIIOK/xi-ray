@@ -17,10 +17,25 @@ die() { echo "[lab-provision] ERROR: $*" >&2; exit 1; }
 mkdir -p "$INSTALL_DIR" "${XRAY_DIR}/bin" "${INSTALL_DIR}/updates/downloads" "${INSTALL_DIR}/updates/staging"
 chmod 755 "$INSTALL_DIR"
 
+install_panel_binary() {
+  src=$1
+  dst="${INSTALL_DIR}/panel"
+  if systemctl is-active --quiet xiaomi-vless-panel.service 2>/dev/null; then
+    log "stopping panel service before binary update"
+    systemctl stop xiaomi-vless-panel.service
+  fi
+  if [ -f "$dst" ]; then
+    cp "$dst" "${dst}.previous"
+  fi
+  cp "$src" "${dst}.new"
+  mv "${dst}.new" "$dst"
+  chmod 755 "$dst"
+}
+
 if [ -n "${LAB_PANEL_BIN:-}" ] && [ -f "$LAB_PANEL_BIN" ]; then
-  cp "$LAB_PANEL_BIN" "${INSTALL_DIR}/panel"
+  install_panel_binary "$LAB_PANEL_BIN"
 elif [ -f "${STAGING}/panel-linux" ]; then
-  cp "${STAGING}/panel-linux" "${INSTALL_DIR}/panel"
+  install_panel_binary "${STAGING}/panel-linux"
 else
   PANEL_SRC=""
   for candidate in \
@@ -33,9 +48,8 @@ else
     fi
   done
   [ -n "$PANEL_SRC" ] || die "panel binary not found — lab-up.sh should build and transfer it first"
-  cp "$PANEL_SRC" "${INSTALL_DIR}/panel"
+  install_panel_binary "$PANEL_SRC"
 fi
-chmod +x "${INSTALL_DIR}/panel"
 log "panel installed"
 
 if [ "${LAB_RESET_CONFIG:-0}" = "1" ]; then
@@ -47,6 +61,12 @@ if [ "${LAB_RESET_CONFIG:-0}" = "1" ]; then
     die "panel.json template not found"
   fi
   log "panel.json reset from lab template"
+  log "clearing lab runtime state (xray, fail-open, staging)"
+  killall xray 2>/dev/null || true
+  echo '{}' > "${XRAY_DIR}/config.json"
+  rm -f "${INSTALL_DIR}/panel.previous"
+  rm -f /data/xiaomi-vless-failopen
+  rm -rf "${INSTALL_DIR}/updates/staging/"* 2>/dev/null || true
 elif [ -f "${INSTALL_DIR}/panel.json" ] && [ "${LAB_KEEP_PANEL_JSON:-0}" = "1" ]; then
   log "keeping existing panel.json"
 elif [ -n "${LAB_PANEL_JSON:-}" ] && [ -f "$LAB_PANEL_JSON" ]; then
@@ -70,7 +90,7 @@ install_script() {
   chmod +x "${INSTALL_DIR}/${name}"
 }
 
-for script in startup_xray_guest.sh xray-guest-iptables.sh xray-guest-sysctl.sh boot-xiaomi-vless.sh; do
+for script in startup_xray_guest.sh xray-guest-iptables.sh xray-guest-iptables-cron.sh xray-guest-sysctl.sh xiaomi-vless-failopen-guard.sh boot-xiaomi-vless.sh; do
   install_script "$script"
 done
 

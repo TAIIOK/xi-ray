@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,11 @@ import (
 )
 
 const CurrentVersion = 2
+
+const (
+	DefaultGuestSubnet   = "192.168.33.0/24"
+	DefaultMainLANSubnet = "192.168.31.0/24"
+)
 
 type PanelConfig struct {
 	Version             int                 `json:"version"`
@@ -27,9 +33,41 @@ type PanelConfig struct {
 	Selection           Selection           `json:"selection"`
 	Observatory         Observatory         `json:"observatory"`
 	Watchdog            Watchdog            `json:"watchdog"`
+	FailOpen            FailOpen            `json:"fail_open"`
 	Logs                Logs                `json:"logs"`
 	Routing             Routing             `json:"routing"`
 }
+
+const DefaultFailOpenMarker = "/data/xiaomi-vless-failopen"
+
+type FailOpen struct {
+	Enabled           *bool  `json:"enabled,omitempty"`
+	RestoreOnRecovery *bool  `json:"restore_on_recovery,omitempty"`
+	MarkerPath        string `json:"marker_path,omitempty"`
+}
+
+func (f FailOpen) EnabledOrDefault() bool {
+	if f.Enabled == nil {
+		return true
+	}
+	return *f.Enabled
+}
+
+func (f FailOpen) RestoreOnRecoveryOrDefault() bool {
+	if f.RestoreOnRecovery == nil {
+		return true
+	}
+	return *f.RestoreOnRecovery
+}
+
+func (f FailOpen) MarkerPathOrDefault() string {
+	if strings.TrimSpace(f.MarkerPath) != "" {
+		return strings.TrimSpace(f.MarkerPath)
+	}
+	return DefaultFailOpenMarker
+}
+
+func boolPtr(v bool) *bool { return &v }
 
 type Paths struct {
 	XrayBin        string `json:"xray_bin"`
@@ -120,8 +158,10 @@ type Node struct {
 	Manual         bool           `json:"manual"`
 	RawLink        string         `json:"raw_link,omitempty"`
 	Hash           string         `json:"hash"`
-	LastLatencyMs  int            `json:"last_latency_ms,omitempty"`
-	LastHealth     string         `json:"last_health,omitempty"`
+	LastLatencyMs      int    `json:"last_latency_ms,omitempty"`
+	LastHealth         string `json:"last_health,omitempty"`
+	LastXrayLatencyMs  int    `json:"last_xray_latency_ms,omitempty"`
+	LastXrayHealth     string `json:"last_xray_health,omitempty"`
 	UpdatedAt      time.Time      `json:"updated_at"`
 }
 
@@ -149,12 +189,12 @@ func DefaultPanelConfig() PanelConfig {
 		Version: CurrentVersion,
 		Paths:   PathsForUSB(DefaultUSBMount),
 		Network: Network{
-			GuestSubnet: "192.168.33.0/24",
+			GuestSubnet: DefaultGuestSubnet,
 			ListenAddr:  "192.168.31.1:7777",
 			XrayAPIAddr: "127.0.0.1:10085",
 		},
 		Iptables: Iptables{
-			GuestSubnet: "192.168.33.0/24",
+			GuestSubnet: DefaultGuestSubnet,
 			TCPPort:     12346,
 			UDPPort:     12345,
 			SOCKSPort:   10808,
@@ -187,6 +227,10 @@ func DefaultPanelConfig() PanelConfig {
 			Enabled:                      true,
 			IntervalSec:                  60,
 			RefreshSubscriptionsOnOutage: true,
+		},
+		FailOpen: FailOpen{
+			Enabled:           boolPtr(true),
+			RestoreOnRecovery: boolPtr(true),
 		},
 		Logs:    LogsForPanelHome(PanelHomeOnUSB(DefaultUSBMount)),
 		Routing: DefaultRouting(),
@@ -427,6 +471,31 @@ func (s *Store) SetPassword(username, password string) error {
 		cfg.Auth.PasswordHash = string(hash)
 		return nil
 	})
+}
+
+func ValidateGuestSubnet(subnet string) error {
+	_, err := NormalizeGuestSubnet(subnet)
+	return err
+}
+
+// NormalizeGuestSubnet returns network CIDR (e.g. 192.168.33.0/24).
+func NormalizeGuestSubnet(subnet string) (string, error) {
+	subnet = strings.TrimSpace(subnet)
+	if subnet == "" {
+		return "", fmt.Errorf("guest subnet must not be empty")
+	}
+	_, ipNet, err := net.ParseCIDR(subnet)
+	if err != nil {
+		return "", fmt.Errorf("invalid CIDR: %w", err)
+	}
+	if ipNet.IP.To4() == nil {
+		return "", fmt.Errorf("IPv4 CIDR required")
+	}
+	ones, bits := ipNet.Mask.Size()
+	if ones == 0 || ones >= bits {
+		return "", fmt.Errorf("invalid prefix length")
+	}
+	return ipNet.String(), nil
 }
 
 func ValidatePaths(p Paths) error {

@@ -22,7 +22,7 @@ chmod +x "$STAGE/panel"
 
 sha256sum "$STAGE/panel" | awk '{print $1}' > "$STAGE/panel.sha256"
 
-cp scripts/startup_xray_guest.sh scripts/xray-guest-iptables.sh scripts/xray-guest-sysctl.sh scripts/boot-xiaomi-vless.sh "$STAGE/scripts/"
+cp scripts/startup_xray_guest.sh scripts/xray-guest-iptables.sh scripts/xray-guest-iptables-cron.sh scripts/xray-guest-sysctl.sh scripts/xiaomi-vless-failopen-guard.sh scripts/boot-xiaomi-vless.sh "$STAGE/scripts/"
 cp deploy/xiaomi-vless-panel.init deploy/xiaomi-vless-xray.init deploy/xiaomi-vless-boot.init deploy/hotplug-usb-xiaomi-vless.sh deploy/install-autostart.sh deploy/install-common.sh deploy/panel-updater.sh deploy/panel.json.example "$STAGE/deploy/"
 cp deploy/install-from-release.sh "$STAGE/install.sh"
 cp deploy/uninstall.sh "$STAGE/uninstall.sh"

@@ -78,7 +78,7 @@ lab_transfer_staging() {
   panel_bin="$1"
   multipass transfer "$panel_bin" "${LAB_VM_NAME}:/tmp/panel-linux"
   multipass transfer "${LAB_REPO_ROOT}/lab/panel.json" "${LAB_VM_NAME}:/tmp/panel-lab.json"
-  for script in startup_xray_guest.sh xray-guest-iptables.sh xray-guest-sysctl.sh boot-xiaomi-vless.sh; do
+  for script in startup_xray_guest.sh xray-guest-iptables.sh xray-guest-iptables-cron.sh xray-guest-sysctl.sh xiaomi-vless-failopen-guard.sh boot-xiaomi-vless.sh; do
     multipass transfer "${LAB_REPO_ROOT}/scripts/${script}" "${LAB_VM_NAME}:/tmp/${script}"
   done
   for script in network-setup.sh guest-netns.sh; do
@@ -107,9 +107,14 @@ lab_deploy_panel_only() {
   multipass exec "$LAB_VM_NAME" -- sudo sh -s <<'REMOTE'
 set -eu
 INSTALL="/mnt/usb-lab/xiaomi-vless"
+if systemctl is-active --quiet xiaomi-vless-panel.service 2>/dev/null; then
+  systemctl stop xiaomi-vless-panel.service
+fi
 [ -x "$INSTALL/panel" ] && cp "$INSTALL/panel" "$INSTALL/panel.previous"
-install -m 755 /tmp/panel-linux "$INSTALL/panel"
-systemctl restart xiaomi-vless-panel.service
+cp /tmp/panel-linux "$INSTALL/panel.new"
+mv "$INSTALL/panel.new" "$INSTALL/panel"
+chmod 755 "$INSTALL/panel"
+systemctl start xiaomi-vless-panel.service
 sleep 1
 systemctl is-active xiaomi-vless-panel.service
 REMOTE

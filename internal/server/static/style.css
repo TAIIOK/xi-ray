@@ -72,9 +72,23 @@ input, select, textarea {
   padding: 0.55rem 0.75rem;
   margin-top: 0.25rem;
 }
+input[type="checkbox"],
+input[type="radio"] {
+  width: auto;
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+}
+.card h3 {
+  margin: 1.25rem 0 0.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.card h3:first-of-type { margin-top: 0; }
 form .field { margin-bottom: 0.85rem; }
 .msg { padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem; }
+.msg[hidden] { display: none !important; }
 .msg.error { background: rgba(239,68,68,.15); color: #fecaca; }
+.msg.warn { background: rgba(245,158,11,.15); color: #fde68a; }
 .msg.ok { background: rgba(34,197,94,.15); color: #bbf7d0; }
 .health-ok { color: var(--ok); }
 .health-dead { color: var(--bad); }
@@ -287,3 +301,112 @@ form .field { margin-bottom: 0.85rem; }
   white-space: pre-wrap;
   word-break: break-all;
 }
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.lang-switch {
+  display: flex;
+  gap: 0.25rem;
+}
+.lang-btn {
+  background: #334155;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.8rem;
+  border-radius: 6px;
+}
+.lang-btn.active {
+  background: var(--accent);
+}
+.help-text {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0.5rem 0 1rem;
+  line-height: 1.45;
+}
+.mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+.mode-option {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.mode-option:hover {
+  border-color: var(--accent);
+}
+.mode-option input {
+  width: auto;
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+.mode-option-body strong {
+  display: block;
+  margin-bottom: 0.2rem;
+}
+.mode-option-body span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.field-row {
+  margin: 1rem 0;
+}
+.field-row label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  cursor: pointer;
+}
+.field-row label input {
+  width: auto;
+  margin-top: 0.15rem;
+}
+.field-row .field-desc {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-left: 1.5rem;
+}
+.card-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+button.btn-sm {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.82rem;
+}
+.watchdog-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.watchdog-banner button {
+  flex-shrink: 0;
+}
+.login-lang {
+  display: flex;
+  justify-content: center;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+td.actions-cell {
+  white-space: nowrap;
+}
+td.actions-cell button {
+  margin-right: 0.35rem;
+}
+

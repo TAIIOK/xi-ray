@@ -27,3 +27,25 @@ func TestGenerateIPTablesScriptIncludesHosts(t *testing.T) {
 		t.Fatal("expected tcp chain")
 	}
 }
+
+func TestGenerateIPTablesTeardownScript(t *testing.T) {
+	script := GenerateIPTablesTeardownScript()
+	for _, want := range []string{
+		"XRAY_GUEST_TCP",
+		"XRAY_GUEST_UDP",
+		"ip rule del fwmark 0x1 table 100",
+		"ip route flush table 100",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("teardown script missing %q", want)
+		}
+	}
+}
+
+func TestIPTablesTeardownScriptPath(t *testing.T) {
+	got := IPTablesTeardownScriptPath("/mnt/usb/xiaomi-vless/xray-guest-iptables.sh")
+	want := "/mnt/usb/xiaomi-vless/xray-guest-iptables-down.sh"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}

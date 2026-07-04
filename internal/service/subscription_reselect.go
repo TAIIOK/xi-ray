@@ -2,8 +2,6 @@ package service
 
 import (
 	"context"
-	"net"
-	"strconv"
 	"strings"
 	"time"
 
@@ -97,7 +95,7 @@ func pickLowestTCPLatency(ctx context.Context, nodes []config.Node) (string, int
 		if n.Address == "" || n.Port <= 0 {
 			continue
 		}
-		ms, err := tcpLatencyMs(ctx, n.Address, n.Port)
+		ms, err := TCPLatencyMs(ctx, n.Address, n.Port)
 		if err != nil {
 			continue
 		}
@@ -107,17 +105,6 @@ func pickLowestTCPLatency(ctx context.Context, nodes []config.Node) (string, int
 		}
 	}
 	return bestID, bestMs
-}
-
-func tcpLatencyMs(ctx context.Context, host string, port int) (int, error) {
-	d := net.Dialer{Timeout: 5 * time.Second}
-	start := time.Now()
-	conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(port)))
-	if err != nil {
-		return 0, err
-	}
-	_ = conn.Close()
-	return int(time.Since(start).Milliseconds()), nil
 }
 
 // reselectAfterSubscriptionUpdate picks a new active node when the subscription list changed

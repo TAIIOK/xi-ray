@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+
+	"github.com/taiiok/xiaomi-vless/internal/i18n"
 )
 
 type Auth struct {
@@ -29,7 +31,8 @@ func (a *Auth) Middleware(next http.Handler) http.Handler {
 			return
 		}
 		if isAPI(r) {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+			locale := i18n.LocaleFromRequest(r)
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": i18n.T(locale, "unauthorized")})
 			return
 		}
 		http.Redirect(w, r, "/login", http.StatusSeeOther)

@@ -3,22 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Routing — Xiaomi VLESS</title>
+  <title data-i18n="routing.title">Маршрутизация — Xiaomi VLESS</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="page-routing">
-  <header>
-    <strong>Xiaomi VLESS Panel</strong>
-    <nav>
-      <a href="/">Dashboard</a>
-      <a href="/servers">Серверы</a>
-      <a href="/subscriptions">Подписки</a>
-      <a href="/routing" class="active">Routing</a>
-      <a href="/settings">Настройки</a>
-      <a href="/logs">Логи</a>
-      <a href="/logout">Выход</a>
-    </nav>
-  </header>
+  <header id="app-header"></header>
   <main>
     <div id="msg" class="msg" hidden></div>
 
@@ -140,7 +129,15 @@
       </aside>
     </div>
   </main>
+  <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
   <script src="/static/routing.js"></script>
+  <script>
+    initI18n().then(() => {
+      renderHeader();
+      applyI18n();
+      RoutingPage.init();
+    });
+  </script>
 </body>
 </html>

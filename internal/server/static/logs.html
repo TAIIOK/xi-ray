@@ -3,41 +3,31 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Логи — Xiaomi VLESS</title>
+  <title data-i18n="logs.title">Логи — Xiaomi VLESS</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header>
-    <strong>Xiaomi VLESS Panel</strong>
-    <nav>
-      <a href="/">Dashboard</a>
-      <a href="/servers">Серверы</a>
-      <a href="/subscriptions">Подписки</a>
-      <a href="/routing">Routing</a>
-      <a href="/settings">Настройки</a>
-      <a href="/logs" class="active">Логи</a>
-      <a href="/logout">Выход</a>
-    </nav>
-  </header>
+  <header id="app-header"></header>
   <main>
     <div id="msg" class="msg" hidden></div>
     <div class="card">
       <div class="field">
-        <label class="label">Источник</label>
+        <label class="label" data-i18n="logs.source">Источник</label>
         <select id="source">
           <option value="startup">Xray startup</option>
           <option value="panel">Panel</option>
           <option value="xray-access">Xray access</option>
           <option value="xray-error">Xray error</option>
         </select>
-        <label class="label">Строк</label>
+        <label class="label" data-i18n="logs.lines">Строк</label>
         <input id="lines" type="number" value="200" min="50" max="2000" style="width:6rem">
-        <button id="btn-refresh">Обновить</button>
-        <label><input type="checkbox" id="auto-refresh"> Авто (10с)</label>
+        <button id="btn-refresh" data-i18n="common.refresh">Обновить</button>
+        <label><input type="checkbox" id="auto-refresh"> <span data-i18n="logs.auto_refresh">Авто (10с)</span></label>
       </div>
-      <pre id="log-output" class="log-view">Загрузка…</pre>
+      <pre id="log-output" class="log-view" data-i18n="logs.loading">Загрузка…</pre>
     </div>
   </main>
+  <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
   <script>
     let timer = null;
@@ -51,7 +41,7 @@
         pre.textContent = data.message + '\n' + (data.path || '');
         return;
       }
-      pre.textContent = (data.lines || []).join('\n') || '(пусто)';
+      pre.textContent = (data.lines || []).join('\n') || t('logs.empty');
       if (data.path) pre.textContent = `# ${data.path} (${data.total} lines total)\n\n` + pre.textContent;
     }
 
@@ -63,7 +53,11 @@
       if (e.target.checked) timer = setInterval(() => loadLogs().catch(() => {}), 10000);
     };
 
-    loadLogs().catch(e => showMsg(document.getElementById('msg'), e.message));
+    initI18n().then(() => {
+      renderHeader();
+      applyI18n();
+      loadLogs().catch(e => showMsg(document.getElementById('msg'), e.message));
+    });
   </script>
 </body>
 </html>

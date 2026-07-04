@@ -1,17 +1,29 @@
 const API = {
+  langHeaders() {
+    const lang = typeof getLang === 'function' ? getLang() : 'ru';
+    return { 'Accept-Language': lang };
+  },
   async get(path) {
-    const r = await fetch(path);
+    const r = await fetch(path, { headers: this.langHeaders() });
     if (!r.ok) throw new Error(await r.text());
     return r.json();
   },
   async send(method, path, body) {
     const r = await fetch(path, {
       method,
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      headers: {
+        ...this.langHeaders(),
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+      },
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.error || r.statusText);
+    if (!r.ok) throw new Error(translateApiMessage(data.error) || data.error || r.statusText);
+    if (data.message) data.message = translateApiMessage(data.message);
+    if (data.message_key && typeof t === 'function') {
+      const tk = t('api.' + data.message_key);
+      if (tk !== 'api.' + data.message_key) data.message = tk;
+    }
     return data;
   },
 };
@@ -76,6 +88,42 @@ function updateAvailable(st) {
   return trimVersion(ver) !== trimVersion(st.current_version) ? ver : null;
 }
 
+function guestNetworkClass(gn) {
+  if (!gn) return 'health-unknown';
+  if (gn.ok && gn.is_guest) return 'health-ok';
+  if (gn.is_guest) return 'health-unknown';
+  return 'health-dead';
+}
+
+function guestNetworkNeedsConfirm(gn) {
+  return !!(gn && (!gn.ok || !gn.is_guest));
+}
+
+function renderGuestNetworkStatus(containerEl, gn, escapeFn) {
+  if (!containerEl) return;
+  const esc = escapeFn || (s => String(s || ''));
+  if (!gn || !gn.message) {
+    containerEl.hidden = true;
+    containerEl.innerHTML = '';
+    return;
+  }
+  const cls = guestNetworkClass(gn);
+  let html = `<div class="${cls}">${esc(gn.message)}</div>`;
+  if (gn.detected_gateway) {
+    const iface = gn.interface || 'br-guest';
+    const subnet = gn.detected_subnet ? ` (${esc(gn.detected_subnet)})` : '';
+    html += `<div class="label">${esc(iface)}: ${esc(gn.detected_gateway)}${subnet}</div>`;
+  }
+  if (gn.main_lan_subnet) {
+    html += `<div class="label">Основная LAN: ${esc(gn.main_lan_subnet)}</div>`;
+  }
+  if (gn.warning && gn.warning !== gn.message) {
+    html += `<div class="label health-unknown">${esc(gn.warning)}</div>`;
+  }
+  containerEl.innerHTML = html;
+  containerEl.hidden = false;
+}
+
 function setActiveNav() {
   const path = location.pathname.replace(/\/$/, '') || '/';
   document.querySelectorAll('nav a').forEach(a => {
@@ -84,4 +132,4 @@ function setActiveNav() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', setActiveNav);
+// setActiveNav is called from renderHeader in i18n.js

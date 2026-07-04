@@ -112,7 +112,11 @@ const RoutingPage = {
       document.getElementById('order_2').value,
       document.getElementById('order_3').value,
     ];
-    const labels = { direct: 'Direct', proxy: 'Proxy', block: 'Block' };
+    const labels = {
+      direct: typeof t === 'function' ? t('routing.action_direct') : 'Direct',
+      proxy: typeof t === 'function' ? t('routing.action_proxy') : 'Proxy',
+      block: typeof t === 'function' ? t('routing.action_block') : 'Block',
+    };
     const el = document.getElementById('pipeline');
     el.innerHTML = order.map((a, i) => `
       <span class="pipeline-step action-${a}">${i + 1}. ${labels[a] || a}</span>
@@ -299,7 +303,7 @@ const RoutingPage = {
       apply: false,
     });
     this.renderPreview(result.preview || []);
-    showMsg(document.getElementById('msg'), 'Preview обновлён', true);
+    showMsg(document.getElementById('msg'), typeof t === 'function' ? t('routing.preview_updated') : 'Preview обновлён', true);
   },
 
   async save(apply) {
@@ -311,29 +315,27 @@ const RoutingPage = {
     showMsg(document.getElementById('msg'), result.message, result.ok);
     if (result.ok) await this.load();
   },
+
+  init() {
+    ['order_1', 'order_2', 'order_3'].forEach(id => {
+      document.getElementById(id).onchange = () => {
+        this.renderPipeline();
+        this.renderPreviewLocal();
+      };
+    });
+
+    document.getElementById('filter-action').onchange = () => this.renderRules();
+    document.getElementById('btn-add-rule').onclick = () => this.addRule();
+    document.querySelectorAll('[data-preset]').forEach(btn => {
+      btn.onclick = () => this.addRule(btn.dataset.preset);
+    });
+    document.querySelectorAll('[data-template]').forEach(btn => {
+      btn.onclick = () => this.applyTemplate(btn.dataset.template);
+    });
+    document.getElementById('btn-preview').onclick = () => this.refreshPreview().catch(e => showMsg(document.getElementById('msg'), e.message));
+    document.getElementById('btn-save').onclick = () => this.save(false).catch(e => showMsg(document.getElementById('msg'), e.message));
+    document.getElementById('btn-save-apply').onclick = () => this.save(true).catch(e => showMsg(document.getElementById('msg'), e.message));
+
+    this.load().catch(e => showMsg(document.getElementById('msg'), e.message));
+  },
 };
-
-document.addEventListener('DOMContentLoaded', () => {
-  setActiveNav();
-
-  ['order_1', 'order_2', 'order_3'].forEach(id => {
-    document.getElementById(id).onchange = () => {
-      RoutingPage.renderPipeline();
-      RoutingPage.renderPreviewLocal();
-    };
-  });
-
-  document.getElementById('filter-action').onchange = () => RoutingPage.renderRules();
-  document.getElementById('btn-add-rule').onclick = () => RoutingPage.addRule();
-  document.querySelectorAll('[data-preset]').forEach(btn => {
-    btn.onclick = () => RoutingPage.addRule(btn.dataset.preset);
-  });
-  document.querySelectorAll('[data-template]').forEach(btn => {
-    btn.onclick = () => RoutingPage.applyTemplate(btn.dataset.template);
-  });
-  document.getElementById('btn-preview').onclick = () => RoutingPage.refreshPreview().catch(e => showMsg(document.getElementById('msg'), e.message));
-  document.getElementById('btn-save').onclick = () => RoutingPage.save(false).catch(e => showMsg(document.getElementById('msg'), e.message));
-  document.getElementById('btn-save-apply').onclick = () => RoutingPage.save(true).catch(e => showMsg(document.getElementById('msg'), e.message));
-
-  RoutingPage.load().catch(e => showMsg(document.getElementById('msg'), e.message));
-});

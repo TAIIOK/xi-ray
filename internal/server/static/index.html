@@ -3,64 +3,70 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dashboard — Xiaomi VLESS</title>
+  <title data-i18n="dashboard.title">Панель — Xiaomi VLESS</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header>
-    <strong>Xiaomi VLESS Panel</strong>
-    <nav>
-      <a href="/" class="active">Dashboard</a>
-      <a href="/servers">Серверы</a>
-      <a href="/subscriptions">Подписки</a>
-      <a href="/routing">Routing</a>
-      <a href="/settings">Настройки</a>
-      <a href="/logs">Логи</a>
-      <a href="/logout">Выход</a>
-    </nav>
-  </header>
+  <header id="app-header"></header>
   <main>
     <div id="msg" class="msg" hidden></div>
-    <div id="watchdog-alert" class="msg error" hidden></div>
+    <div id="watchdog-active" class="msg error watchdog-banner" hidden>
+      <span id="watchdog-active-text"></span>
+    </div>
+    <div id="watchdog-history" class="msg warn watchdog-banner" hidden>
+      <span id="watchdog-history-text"></span>
+      <button type="button" id="watchdog-dismiss" class="secondary btn-sm" data-i18n="common.dismiss">Скрыть</button>
+    </div>
+    <div id="failopen-banner" class="msg warn watchdog-banner" hidden>
+      <span id="failopen-banner-text"></span>
+    </div>
+    <div id="guest-network-alert" class="msg warn" hidden></div>
     <div class="grid">
       <div class="card">
-        <div class="label">Статус</div>
+        <div class="label" data-i18n="dashboard.status">Статус</div>
         <div id="state" class="value">—</div>
       </div>
       <div class="card">
-        <div class="label">Exit IP</div>
+        <div class="label" data-i18n="dashboard.exit_ip">Внешний IP</div>
         <div id="exit-ip" class="value">—</div>
       </div>
       <div class="card">
-        <div class="label">Latency</div>
+        <div class="label" data-i18n="dashboard.latency">Задержка</div>
         <div id="latency" class="value">—</div>
       </div>
       <div class="card">
-        <div class="label">Активный outbound</div>
+        <div class="label" data-i18n="dashboard.active_outbound">Активный outbound</div>
         <div id="active-outbound" class="value">—</div>
       </div>
     </div>
 
     <div class="card">
-      <h2>Observatory <span id="obs-live" class="label"></span></h2>
+      <h2><span data-i18n="dashboard.observatory">Observatory</span> <span id="obs-live" class="label"></span></h2>
       <table>
         <thead>
-          <tr><th>Сервер</th><th>Tag</th><th>Health</th><th>Delay</th><th>Source</th></tr>
+          <tr>
+            <th data-i18n="dashboard.col_server">Сервер</th>
+            <th data-i18n="dashboard.col_tag">Tag</th>
+            <th data-i18n="dashboard.col_health">Health</th>
+            <th data-i18n="dashboard.col_delay">Задержка</th>
+            <th data-i18n="dashboard.col_source">Источник</th>
+          </tr>
         </thead>
         <tbody id="obs-body"></tbody>
       </table>
     </div>
 
     <div class="card">
-      <h2>Трафик гостевой сети</h2>
+      <h2 data-i18n="dashboard.guest_traffic">Трафик гостевой сети</h2>
+      <div id="guest-network-line" class="label" style="margin-bottom:0.75rem">—</div>
       <div class="grid">
         <div>
-          <div class="label">TCP REDIRECT</div>
+          <div class="label" data-i18n="dashboard.tcp_redirect">TCP REDIRECT</div>
           <div id="tcp-pkts" class="value">—</div>
           <div id="tcp-bytes" class="label"></div>
         </div>
         <div>
-          <div class="label">UDP TProxy</div>
+          <div class="label" data-i18n="dashboard.udp_tproxy">UDP TProxy</div>
           <div id="udp-pkts" class="value">—</div>
           <div id="udp-bytes" class="label"></div>
         </div>
@@ -68,17 +74,18 @@
     </div>
 
     <div class="card">
-      <button id="btn-refresh">Обновить</button>
-      <button id="btn-restart" class="secondary">Restart Xray</button>
-      <button id="btn-apply">Apply config</button>
+      <button id="btn-refresh" data-i18n="common.refresh">Обновить</button>
+      <button id="btn-restart" class="secondary" data-i18n="dashboard.restart_xray">Перезапустить Xray</button>
+      <button id="btn-apply" data-i18n="dashboard.apply_config">Применить config</button>
     </div>
   </main>
+  <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
   <script>
     function renderObservatory(obs, vpnConnected) {
       const liveLabel = obs.live
-        ? '(live from Xray API)'
-        : (vpnConnected ? '(SOCKS probe — нажмите Apply для Observatory API)' : '(cache / offline)');
+        ? t('dashboard.obs_live')
+        : (vpnConnected ? t('dashboard.obs_socks') : t('dashboard.obs_cache'));
       document.getElementById('obs-live').textContent = liveLabel;
       const tbody = document.getElementById('obs-body');
       tbody.innerHTML = '';
@@ -88,12 +95,12 @@
           <td>${escapeHtml(n.name)}</td>
           <td><code>${escapeHtml(n.tag)}</code></td>
           <td class="${healthClass(n.health)}">${escapeHtml(n.health)}${n.last_error ? ' — ' + escapeHtml(n.last_error) : ''}</td>
-          <td>${n.latency_ms ? n.latency_ms + ' ms' : '—'}</td>
-          <td>${escapeHtml(n.source || '—')}</td>`;
+          <td>${n.latency_ms ? n.latency_ms + ' ' + t('common.ms') : t('common.empty')}</td>
+          <td>${escapeHtml(n.source || t('common.empty'))}</td>`;
         tbody.appendChild(tr);
       });
       if (!(obs.nodes || []).length) {
-        tbody.innerHTML = '<tr><td colspan="5">Нет активных серверов</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="5">${t('dashboard.no_active_servers')}</td></tr>`;
       }
     }
 
@@ -103,10 +110,82 @@
 
     function fmtChainStats(chain) {
       if (!chain || !chain.available) {
-        return { pkts: '—', hint: 'iptables не применён — нажмите Apply' };
+        return { pkts: t('common.empty'), hint: t('dashboard.iptables_not_applied') };
       }
-      const hint = chain.packets === 0 ? 'нет трафика с guest Wi‑Fi' : '';
+      const hint = chain.packets === 0 ? t('dashboard.no_guest_traffic') : '';
       return { pkts: String(chain.packets), hint: hint || fmtBytes(chain.bytes) };
+    }
+
+    function setBanner(el, show, text) {
+      if (!el) return;
+      const content = String(text || '').trim();
+      if (!show || !content) {
+        el.hidden = true;
+        const textEl = el.querySelector('[id$="-text"]') || el.firstElementChild;
+        if (textEl) textEl.textContent = '';
+        return;
+      }
+      el.hidden = false;
+      const textEl = el.querySelector('[id$="-text"]') || el.firstElementChild;
+      if (textEl) textEl.textContent = content;
+    }
+
+    function renderWatchdog(s) {
+      const activeEl = document.getElementById('watchdog-active');
+      const historyEl = document.getElementById('watchdog-history');
+      const failOpenEl = document.getElementById('failopen-banner');
+
+      setBanner(failOpenEl, s.fail_open_active, s.fail_open_active ? t('dashboard.fail_open_active') : '');
+
+      if (s.watchdog_active) {
+        setBanner(activeEl, true, t('dashboard.watchdog_active', { reason: s.message || s.state || t('common.unknown') }));
+        historyEl.hidden = true;
+        const historyText = document.getElementById('watchdog-history-text');
+        if (historyText) historyText.textContent = '';
+        return;
+      }
+
+      activeEl.hidden = true;
+      const activeText = document.getElementById('watchdog-active-text');
+      if (activeText) activeText.textContent = '';
+
+      const alert = String(s.watchdog_alert || '').trim();
+      if (alert) {
+        historyEl.hidden = false;
+        document.getElementById('watchdog-history-text').textContent =
+          t('dashboard.watchdog_history', { msg: alert });
+      } else {
+        historyEl.hidden = true;
+        const historyText = document.getElementById('watchdog-history-text');
+        if (historyText) historyText.textContent = '';
+      }
+    }
+
+    function renderGuestNetworkDashboard(gn) {
+      const alertEl = document.getElementById('guest-network-alert');
+      const lineEl = document.getElementById('guest-network-line');
+      if (!gn || !gn.message) {
+        alertEl.hidden = true;
+        lineEl.textContent = t('common.empty');
+        return;
+      }
+      if (gn.warning) {
+        const warn = String(gn.warning).trim();
+        if (warn) {
+          alertEl.textContent = warn;
+          alertEl.hidden = false;
+        } else {
+          alertEl.hidden = true;
+        }
+      } else {
+        alertEl.hidden = true;
+      }
+      const cls = guestNetworkClass(gn);
+      if (gn.ok && gn.detected_gateway) {
+        lineEl.innerHTML = `<span class="${cls}">${escapeHtml(gn.interface || 'br-guest')}: ${escapeHtml(gn.detected_gateway)} (${escapeHtml(gn.detected_subnet || gn.config_subnet)}) ✓</span>`;
+      } else {
+        lineEl.innerHTML = `<span class="${cls}">${escapeHtml(gn.message)}</span>`;
+      }
     }
 
     async function loadStatus() {
@@ -114,9 +193,9 @@
       const el = document.getElementById('state');
       el.textContent = s.state;
       el.className = 'value ' + stateClass(s.state);
-      document.getElementById('exit-ip').textContent = s.exit_ip || '—';
-      document.getElementById('latency').textContent = s.probe_latency_ms ? s.probe_latency_ms + ' ms' : '—';
-      document.getElementById('active-outbound').textContent = s.active_outbound || '—';
+      document.getElementById('exit-ip').textContent = s.exit_ip || t('common.empty');
+      document.getElementById('latency').textContent = s.probe_latency_ms ? s.probe_latency_ms + ' ' + t('common.ms') : t('common.empty');
+      document.getElementById('active-outbound').textContent = s.active_outbound || t('common.empty');
       const tcp = fmtChainStats(s.iptables_tcp);
       const udp = fmtChainStats(s.iptables_udp);
       document.getElementById('tcp-pkts').textContent = tcp.pkts;
@@ -124,26 +203,28 @@
       document.getElementById('udp-pkts').textContent = udp.pkts;
       document.getElementById('udp-bytes').textContent = udp.hint;
       renderObservatory(s.observatory || { nodes: [] }, s.vpn_connected);
-      const alertEl = document.getElementById('watchdog-alert');
-      if (s.watchdog_alert) {
-        alertEl.textContent = 'Watchdog: ' + s.watchdog_alert;
-        alertEl.hidden = false;
-      } else {
-        alertEl.hidden = true;
-      }
-      if (s.message) showMsg(document.getElementById('msg'), s.message, s.state === 'running');
+      renderWatchdog(s);
+      renderGuestNetworkDashboard(s.guest_network);
+      if (s.message) showMsg(document.getElementById('msg'), translateApiMessage(s.message), s.state === 'running');
     }
+
+    document.getElementById('watchdog-dismiss').onclick = async () => {
+      try {
+        await API.send('POST', '/api/watchdog/dismiss', {});
+        document.getElementById('watchdog-history').hidden = true;
+      } catch (e) { showMsg(document.getElementById('msg'), e.message); }
+    };
 
     document.getElementById('btn-refresh').onclick = async () => {
       const btn = document.getElementById('btn-refresh');
       try {
-        await withButtonBusy(btn, 'Обновление…', () => loadStatus());
+        await withButtonBusy(btn, t('common.updating'), () => loadStatus());
       } catch (e) { showMsg(document.getElementById('msg'), e.message); }
     };
     document.getElementById('btn-restart').onclick = async () => {
       try {
         await API.send('POST', '/api/restart');
-        showMsg(document.getElementById('msg'), 'Xray перезапущен', true);
+        showMsg(document.getElementById('msg'), t('dashboard.xray_restarted'), true);
         await loadStatus();
       } catch (e) { showMsg(document.getElementById('msg'), e.message); }
     };
@@ -155,18 +236,23 @@
       } catch (e) { showMsg(document.getElementById('msg'), e.message); }
     };
 
-    loadStatus().catch(e => showMsg(document.getElementById('msg'), e.message));
-    setInterval(() => loadStatus().catch(() => {}), 15000);
-
-    API.get('/api/update/status').then(st => {
-      const footer = document.createElement('footer');
-      footer.style.cssText = 'margin:2rem 0 1rem;text-align:center;opacity:0.7;font-size:0.85rem';
-      footer.textContent = 'panel ' + (st.current_version || 'dev');
-      if (st.phase && st.phase !== 'idle' && st.phase !== 'completed') {
-        footer.textContent += ' — обновление: ' + st.phase;
-      }
-      document.body.appendChild(footer);
-    }).catch(() => {});
+    document.addEventListener('DOMContentLoaded', () => {
+      initI18n().then(() => {
+        renderHeader();
+        applyI18n();
+        loadStatus().catch(e => showMsg(document.getElementById('msg'), e.message));
+        setInterval(() => loadStatus().catch(() => {}), 15000);
+        API.get('/api/update/status').then(st => {
+          const footer = document.createElement('footer');
+          footer.style.cssText = 'margin:2rem 0 1rem;text-align:center;opacity:0.7;font-size:0.85rem';
+          footer.textContent = t('dashboard.panel_version', { version: st.current_version || 'dev' });
+          if (st.phase && st.phase !== 'idle' && st.phase !== 'completed') {
+            footer.textContent += t('dashboard.update_phase', { phase: st.phase });
+          }
+          document.body.appendChild(footer);
+        }).catch(() => {});
+      });
+    });
   </script>
 </body>
 </html>

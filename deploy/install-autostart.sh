@@ -5,12 +5,15 @@ set -eu
 
 INSTALL_DIR="${INSTALL_DIR:-${USB_MOUNT:-/mnt/usb-ed49605f}/xiaomi-vless}"
 IPTABLES_SCRIPT="${INSTALL_DIR}/xray-guest-iptables.sh"
+IPTABLES_CRON="${INSTALL_DIR}/xray-guest-iptables-cron.sh"
+GUARD_SCRIPT="/data/xiaomi-vless-failopen-guard.sh"
 USER_STARTUP="/data/startup_user.sh"
 CRON_FILE="/etc/crontabs/root"
 BOOT_SCRIPT="/data/xiaomi-vless-boot.sh"
 BOOT_SRC="${BOOT_SRC:-}"
 
 MARKER_BOOT="# xiaomi-vless-boot"
+MARKER_FAILOPEN="# xiaomi-vless-failopen-guard"
 MARKER_GUEST="# xiaomi-vless-guest-vpn"
 MARKER_PANEL="# xiaomi-vless-panel"
 MARKER_UPDATE="# xiaomi-vless-update-resume"
@@ -42,6 +45,40 @@ install_boot_script() {
   cp -f "$src" "${INSTALL_DIR}/boot-xiaomi-vless.sh"
   chmod +x "${INSTALL_DIR}/boot-xiaomi-vless.sh"
   log "boot script installed: $BOOT_SCRIPT"
+}
+
+install_failopen_guard() {
+  script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+  for candidate in \
+    "${script_dir}/../scripts/xiaomi-vless-failopen-guard.sh" \
+    "${INSTALL_DIR}/xiaomi-vless-failopen-guard.sh" \
+    "${script_dir}/xiaomi-vless-failopen-guard.sh"; do
+    if [ -f "$candidate" ]; then
+      cp -f "$candidate" "$GUARD_SCRIPT"
+      chmod +x "$GUARD_SCRIPT"
+      cp -f "$candidate" "${INSTALL_DIR}/xiaomi-vless-failopen-guard.sh"
+      chmod +x "${INSTALL_DIR}/xiaomi-vless-failopen-guard.sh"
+      log "fail-open guard installed: $GUARD_SCRIPT"
+      return 0
+    fi
+  done
+  log "WARN: xiaomi-vless-failopen-guard.sh not found — skip"
+}
+
+install_iptables_cron_wrapper() {
+  script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+  for candidate in \
+    "${script_dir}/../scripts/xray-guest-iptables-cron.sh" \
+    "${INSTALL_DIR}/xray-guest-iptables-cron.sh" \
+    "${script_dir}/xray-guest-iptables-cron.sh"; do
+    if [ -f "$candidate" ]; then
+      cp -f "$candidate" "$IPTABLES_CRON"
+      chmod +x "$IPTABLES_CRON"
+      log "iptables cron wrapper installed: $IPTABLES_CRON"
+      return 0
+    fi
+  done
+  log "WARN: xray-guest-iptables-cron.sh not found — cron will call iptables script directly"
 }
 
 remove_marker_block() {
@@ -148,7 +185,10 @@ install_cron() {
   mkdir -p "$(dirname "$CRON_FILE")" 2>/dev/null || true
   [ -f "$CRON_FILE" ] || touch "$CRON_FILE"
 
-  grep -v xiaomi-vless-boot "$CRON_FILE" 2>/dev/null | grep -v '/data/xiaomi-vless-boot.sh' > "${CRON_FILE}.tmp" 2>/dev/null || true
+  grep -v xiaomi-vless-boot "$CRON_FILE" 2>/dev/null \
+    | grep -v '/data/xiaomi-vless-boot.sh' \
+    | grep -v xiaomi-vless-failopen-guard \
+    | grep -v 'xray-guest-iptables' > "${CRON_FILE}.tmp" 2>/dev/null || true
   if [ -s "${CRON_FILE}.tmp" ]; then
     mv "${CRON_FILE}.tmp" "$CRON_FILE"
   else
@@ -162,8 +202,17 @@ install_cron() {
   } >> "$CRON_FILE"
   log "cron boot + panel watchdog added"
 
-  if [ -x "$IPTABLES_SCRIPT" ] && ! grep -q 'xray-guest-iptables.sh' "$CRON_FILE" 2>/dev/null; then
-    echo "*/2 * * * * ${IPTABLES_SCRIPT} >/dev/null 2>&1" >> "$CRON_FILE"
+  if [ -x "$GUARD_SCRIPT" ] && ! grep -q 'xiaomi-vless-failopen-guard.sh' "$CRON_FILE" 2>/dev/null; then
+    echo "* * * * * ${GUARD_SCRIPT} >/dev/null 2>&1 # ${MARKER_FAILOPEN}" >> "$CRON_FILE"
+    log "cron fail-open guard added"
+  fi
+
+  cron_iptables="$IPTABLES_CRON"
+  if [ ! -x "$cron_iptables" ]; then
+    cron_iptables="$IPTABLES_SCRIPT"
+  fi
+  if [ -x "$cron_iptables" ] && ! grep -q 'xray-guest-iptables' "$CRON_FILE" 2>/dev/null; then
+    echo "*/2 * * * * ${cron_iptables} >/dev/null 2>&1" >> "$CRON_FILE"
     log "cron iptables refresh added"
   fi
 
@@ -183,6 +232,8 @@ INIT_SRC="${INIT_SRC:-${SCRIPT_DIR}/xiaomi-vless-xray.init}"
 BOOT_SRC="${BOOT_SRC:-${SCRIPT_DIR}/../scripts/boot-xiaomi-vless.sh}"
 
 install_boot_script
+install_failopen_guard
+install_iptables_cron_wrapper
 remove_uci_firewall
 install_user_startup
 install_hotplug

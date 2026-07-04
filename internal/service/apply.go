@@ -16,11 +16,12 @@ import (
 )
 
 type ApplyService struct {
-	store *config.Store
+	store    *config.Store
+	failOpen *FailOpenService
 }
 
-func NewApplyService(store *config.Store) *ApplyService {
-	return &ApplyService{store: store}
+func NewApplyService(store *config.Store, failOpen *FailOpenService) *ApplyService {
+	return &ApplyService{store: store, failOpen: failOpen}
 }
 
 type ApplyResult struct {
@@ -86,6 +87,10 @@ func (s *ApplyService) Apply(ctx context.Context) (*ApplyResult, error) {
 		return nil, err
 	}
 
+	if err := writeIPTablesTeardownScript(cfg); err != nil {
+		return nil, err
+	}
+
 	_ = os.Remove(cfg.Paths.XrayConfig + ".new") // legacy temp name from older panel builds
 	if err := writeConfigFile(cfg.Paths.XrayConfig, xrayData); err != nil {
 		return &ApplyResult{OK: false, Message: fmt.Sprintf("write xray config to USB: %v", err)}, nil
@@ -96,10 +101,12 @@ func (s *ApplyService) Apply(ctx context.Context) (*ApplyResult, error) {
 	ensureXrayLogFiles(cfg)
 
 	if err := s.restartStack(context.WithoutCancel(ctx), cfg); err != nil {
+		_ = s.failOpen.MaybeEnable(ctx)
 		return &ApplyResult{OK: false, Message: err.Error()}, nil
 	}
 
 	if err := s.waitHealthy(ctx, 15*time.Second); err != nil {
+		_ = s.failOpen.MaybeEnable(ctx)
 		detail := err.Error()
 		if IsXrayRunning() {
 			detail += "\n(xray process is running; check routing/outbound or SOCKS port)"
@@ -108,6 +115,8 @@ func (s *ApplyService) Apply(ctx context.Context) (*ApplyResult, error) {
 		}
 		return &ApplyResult{OK: false, Message: fmt.Sprintf("applied but health check failed: %s", detail)}, nil
 	}
+
+	_ = s.failOpen.Disable()
 
 	return &ApplyResult{OK: true, Message: "config and iptables applied, xray restarted"}, nil
 }

@@ -148,7 +148,7 @@ build_panel "$GOARCH"
 log "provisioning VM (panel, Xray, network, systemd)..."
 multipass transfer "$PANEL_BIN" "${VM_NAME}:/tmp/panel-linux"
 multipass transfer "${REPO_ROOT}/lab/panel.json" "${VM_NAME}:/tmp/panel-lab.json"
-for script in startup_xray_guest.sh xray-guest-iptables.sh xray-guest-sysctl.sh boot-xiaomi-vless.sh; do
+for script in startup_xray_guest.sh xray-guest-iptables.sh xray-guest-iptables-cron.sh xray-guest-sysctl.sh xiaomi-vless-failopen-guard.sh boot-xiaomi-vless.sh; do
   multipass transfer "${REPO_ROOT}/scripts/${script}" "${VM_NAME}:/tmp/${script}"
 done
 for script in network-setup.sh guest-netns.sh; do

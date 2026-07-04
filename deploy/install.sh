@@ -50,11 +50,15 @@ fi
 
 cp "${SCRIPT_DIR}/scripts/startup_xray_guest.sh" "${INSTALL_DIR}/startup_xray_guest.sh"
 cp "${SCRIPT_DIR}/scripts/xray-guest-iptables.sh" "${INSTALL_DIR}/xray-guest-iptables.sh"
+cp "${SCRIPT_DIR}/scripts/xray-guest-iptables-cron.sh" "${INSTALL_DIR}/xray-guest-iptables-cron.sh"
 cp "${SCRIPT_DIR}/scripts/xray-guest-sysctl.sh" "${INSTALL_DIR}/xray-guest-sysctl.sh"
+cp "${SCRIPT_DIR}/scripts/xiaomi-vless-failopen-guard.sh" "${INSTALL_DIR}/xiaomi-vless-failopen-guard.sh"
 cp "${SCRIPT_DIR}/scripts/boot-xiaomi-vless.sh" "${INSTALL_DIR}/boot-xiaomi-vless.sh"
 cp "${SCRIPT_DIR}/deploy/hotplug-usb-xiaomi-vless.sh" "${INSTALL_DIR}/hotplug-usb-xiaomi-vless.sh"
 chmod +x "${INSTALL_DIR}/startup_xray_guest.sh" "${INSTALL_DIR}/xray-guest-iptables.sh" \
-  "${INSTALL_DIR}/xray-guest-sysctl.sh" "${INSTALL_DIR}/boot-xiaomi-vless.sh" \
+  "${INSTALL_DIR}/xray-guest-iptables-cron.sh" \
+  "${INSTALL_DIR}/xray-guest-sysctl.sh" "${INSTALL_DIR}/xiaomi-vless-failopen-guard.sh" \
+  "${INSTALL_DIR}/boot-xiaomi-vless.sh" \
   "${INSTALL_DIR}/hotplug-usb-xiaomi-vless.sh"
 log "guest VPN and boot scripts installed"
 

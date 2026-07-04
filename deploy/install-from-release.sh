@@ -61,7 +61,7 @@ install_files() {
   chmod +x "$INSTALL_DIR/panel-updater.sh"
 
   mkdir -p "$INSTALL_DIR/scripts"
-  for f in startup_xray_guest.sh xray-guest-iptables.sh xray-guest-sysctl.sh boot-xiaomi-vless.sh; do
+  for f in startup_xray_guest.sh xray-guest-iptables.sh xray-guest-iptables-cron.sh xray-guest-sysctl.sh xiaomi-vless-failopen-guard.sh boot-xiaomi-vless.sh; do
     src="$BUNDLE_DIR/scripts/$f"
     [ -f "$src" ] || die "missing $src in bundle"
     cp -f "$src" "$INSTALL_DIR/scripts/$f"

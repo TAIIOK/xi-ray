@@ -19,3 +19,19 @@ func TestNormalizeRuleOrder(t *testing.T) {
 		t.Fatalf("order: %v", r.RuleOrder)
 	}
 }
+
+func TestRoutingIsEmptyPayload(t *testing.T) {
+	empty := Routing{}
+	if !empty.IsEmptyPayload() {
+		t.Fatal("expected empty routing payload")
+	}
+	explicit := DefaultRouting()
+	explicit.Rules = []RoutingRule{}
+	if explicit.IsEmptyPayload() {
+		t.Fatal("fully populated defaults should not be empty payload")
+	}
+	withRules := Routing{Rules: []RoutingRule{{ID: "1", Name: "x", Action: "direct", Domains: []string{"geosite:cn"}, Enabled: true}}}
+	if withRules.IsEmptyPayload() {
+		t.Fatal("routing with rules is not empty payload")
+	}
+}

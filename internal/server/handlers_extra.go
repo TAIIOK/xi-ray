@@ -168,3 +168,39 @@ func (s *Server) handleAPIRestore(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"ok": "true"})
 }
+
+func (s *Server) handleAPIGuestNetworkCheck(w http.ResponseWriter, r *http.Request) {
+	subnet := ""
+	if r.Method == http.MethodPost {
+		var req struct {
+			GuestSubnet string `json:"guest_subnet"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		subnet = req.GuestSubnet
+	}
+	st := s.panel.CheckGuestNetwork(subnet)
+	writeJSON(w, http.StatusOK, st)
+}
+
+func (s *Server) handleAPIOnboardingNetwork(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		GuestSubnet string `json:"guest_subnet"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	st, err := s.panel.UpdateOnboardingNetwork(req.GuestSubnet)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":            true,
+		"guest_subnet":  st.ConfigSubnet,
+		"guest_network": st,
+	})
+}

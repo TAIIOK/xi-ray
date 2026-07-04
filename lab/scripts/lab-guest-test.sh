@@ -10,7 +10,7 @@ if ! multipass info "$VM_NAME" >/dev/null 2>&1; then
 fi
 
 echo "Setting up guest namespace and running checks..."
-multipass exec "$VM_NAME" -- sudo sh -s <<'REMOTE'
+multipass exec "$VM_NAME" -- sudo env LAB_FAILOPEN_TEST="${LAB_FAILOPEN_TEST:-0}" sh -s <<'REMOTE'
 set -eu
 INSTALL_DIR="/mnt/usb-lab/xiaomi-vless"
 NETNS="guest-test"
@@ -29,6 +29,24 @@ ip netns exec "$NETNS" curl -4 -sS --connect-timeout 8 https://ifconfig.me || \
 echo
 echo "--- iptables counters ---"
 iptables -t nat -L XRAY_GUEST_TCP -v -n 2>/dev/null | head -5 || true
+
+if [ "${LAB_FAILOPEN_TEST:-0}" = "1" ]; then
+  echo
+  echo "--- fail-open test: kill xray, run guard ---"
+  killall xray 2>/dev/null || true
+  sleep 1
+  mkdir -p /data
+  sh "${INSTALL_DIR}/xiaomi-vless-failopen-guard.sh" || true
+  if iptables -t nat -C PREROUTING -j XRAY_GUEST_TCP 2>/dev/null; then
+    echo "FAIL: guest redirect still active after fail-open"
+    exit 1
+  fi
+  if [ ! -f /data/xiaomi-vless-failopen ]; then
+    echo "FAIL: fail-open marker missing"
+    exit 1
+  fi
+  echo "OK: fail-open removed guest redirect"
+fi
 REMOTE
 
 echo

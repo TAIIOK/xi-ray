@@ -81,29 +81,23 @@ func (w *Watchdog) loop() {
 
 func (w *Watchdog) runOnce(ctx context.Context) {
 	status := w.panel.status.GetStatus(ctx)
-	obs := status.Observatory
-
-	outage := false
-	reason := ""
-
-	if !status.XrayRunning {
-		outage = true
-		reason = "xray not running"
-	} else if !status.VPNConnected {
-		allDead := len(obs.Nodes) > 0
-		for _, n := range obs.Nodes {
-			if n.Alive {
-				allDead = false
-				break
-			}
-		}
-		if allDead || len(obs.Nodes) == 0 {
-			outage = true
-			reason = "VPN probe failed and all outbounds dead"
-		}
-	}
+	outage, reason := DetectWatchdogOutage(status.XrayRunning, status.VPNConnected, status.Observatory)
 
 	if !outage {
+		cfg := w.panel.store.Get()
+		if w.panel.failOpen.IsActive() && cfg.FailOpen.RestoreOnRecoveryOrDefault() {
+			if applyResult, err := w.panel.apply.Apply(ctx); err != nil {
+				log.Printf("watchdog recovery apply error: %v", err)
+			} else if applyResult != nil && !applyResult.OK {
+				log.Printf("watchdog recovery apply: %s", applyResult.Message)
+			}
+		}
+		if cfg.Watchdog.LastAlert != "" {
+			_ = w.panel.store.Update(func(c *config.PanelConfig) error {
+				c.Watchdog.LastAlert = ""
+				return nil
+			})
+		}
 		return
 	}
 
@@ -124,6 +118,19 @@ func (w *Watchdog) runOnce(ctx context.Context) {
 		msg += fmt.Sprintf("; apply error: %v", err)
 	} else if applyResult != nil {
 		msg += fmt.Sprintf("; apply: %s", applyResult.Message)
+	}
+
+	status = w.panel.status.GetStatus(ctx)
+	outage, reason = DetectWatchdogOutage(status.XrayRunning, status.VPNConnected, status.Observatory)
+	if outage && cfg.FailOpen.EnabledOrDefault() {
+		if err := w.panel.failOpen.Enable(ctx); err != nil {
+			msg += fmt.Sprintf("; fail-open error: %v", err)
+		} else {
+			msg += "; guest switched to direct internet (fail-open)"
+			if reason != "" {
+				msg += fmt.Sprintf(" (%s)", reason)
+			}
+		}
 	}
 
 	_ = w.panel.store.Update(func(c *config.PanelConfig) error {

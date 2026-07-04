@@ -59,6 +59,26 @@ apply_iptables_with_retry() {
   return 1
 }
 
+fail_open() {
+  MARKER="/data/xiaomi-vless-failopen"
+  DOWN="${BASE}/xray-guest-iptables-down.sh"
+  log "fail-open: removing guest redirect rules"
+  if [ -x "$DOWN" ]; then
+    sh "$DOWN" >> "$LOG" 2>&1 || true
+  else
+    iptables -t nat -D PREROUTING -j XRAY_GUEST_TCP 2>/dev/null || true
+    iptables -t nat -F XRAY_GUEST_TCP 2>/dev/null || true
+    iptables -t nat -X XRAY_GUEST_TCP 2>/dev/null || true
+    iptables -t mangle -D PREROUTING -j XRAY_GUEST_UDP 2>/dev/null || true
+    iptables -t mangle -F XRAY_GUEST_UDP 2>/dev/null || true
+    iptables -t mangle -X XRAY_GUEST_UDP 2>/dev/null || true
+    ip rule del fwmark 0x1 table 100 2>/dev/null || true
+    ip route flush table 100 2>/dev/null || true
+  fi
+  touch "$MARKER" 2>/dev/null || true
+  log "fail-open: guest traffic on direct path"
+}
+
 mkdir -p "$BASE" 2>/dev/null || true
 
 log "=== startup_xray_guest.sh begin ==="
@@ -84,6 +104,7 @@ fi
 
 if ! "$XRAY" run -c "$CONFIG" >> "$LOG" 2>&1 & then
   log "ERROR: failed to launch xray"
+  fail_open
   exit 1
 fi
 
@@ -91,6 +112,7 @@ sleep 3
 
 if ! pidof xray >/dev/null 2>&1; then
   log "ERROR: xray process not running after start"
+  fail_open
   exit 1
 fi
 
@@ -100,6 +122,7 @@ sleep 8
 
 if apply_iptables_with_retry; then
   log "iptables applied"
+  rm -f /data/xiaomi-vless-failopen 2>/dev/null || true
 else
   log "WARN: iptables apply failed, cron will retry"
 fi

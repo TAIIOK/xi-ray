@@ -3,43 +3,38 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Настройки — Xiaomi VLESS</title>
+  <title data-i18n="settings.title">Настройки — Xiaomi VLESS</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header>
-    <strong>Xiaomi VLESS Panel</strong>
-    <nav>
-      <a href="/">Dashboard</a>
-      <a href="/servers">Серверы</a>
-      <a href="/subscriptions">Подписки</a>
-      <a href="/routing">Routing</a>
-      <a href="/settings" class="active">Настройки</a>
-      <a href="/logs">Логи</a>
-      <a href="/logout">Выход</a>
-    </nav>
-  </header>
+  <header id="app-header"></header>
   <main>
     <div id="msg" class="msg" hidden></div>
 
     <div class="card">
-      <h2>Пути и сеть</h2>
+      <h2 data-i18n="settings.paths_network">Пути и сеть</h2>
       <form id="settings-form">
-        <div class="field"><label class="label">Xray binary</label><input id="xray_bin"></div>
-        <div class="field"><label class="label">Xray config</label><input id="xray_config"></div>
-        <div class="field"><label class="label">Startup script</label><input id="startup_script"></div>
-        <div class="field"><label class="label">iptables script</label><input id="iptables_script"></div>
-        <div class="field"><label class="label">Guest subnet</label><input id="guest_subnet"></div>
-        <div class="field"><label class="label">Listen addr</label><input id="listen_addr"></div>
-        <div class="field"><label class="label">Xray API addr</label><input id="xray_api_addr" placeholder="127.0.0.1:10085"></div>
-        <div class="field"><label class="label">Observatory probe URL</label><input id="probe_url"></div>
-        <div class="field"><label class="label">Observatory interval</label><input id="probe_interval"></div>
-        <button type="submit">Сохранить</button>
+        <div class="field"><label class="label" data-i18n="settings.xray_bin">Xray binary</label><input id="xray_bin"></div>
+        <div class="field"><label class="label" data-i18n="settings.xray_config">Xray config</label><input id="xray_config"></div>
+        <div class="field"><label class="label" data-i18n="settings.startup_script">Startup script</label><input id="startup_script"></div>
+        <div class="field"><label class="label" data-i18n="settings.iptables_script">iptables script</label><input id="iptables_script"></div>
+        <div class="field"><label class="label" data-i18n="settings.guest_subnet">Guest subnet</label><input id="guest_subnet"></div>
+        <div class="inline-actions" style="margin-bottom:0.75rem">
+          <button type="button" id="btn-guest-check" class="secondary">Проверить гостевую сеть</button>
+          <button type="button" id="btn-guest-suggest" class="secondary">Подставить с роутера</button>
+        </div>
+        <div id="guest-network-banner" class="msg warn" hidden></div>
+        <div id="guest-network-status" class="setup-log" hidden></div>
+        <div class="field"><label class="label" data-i18n="settings.listen_addr">Listen addr</label><input id="listen_addr"></div>
+        <div class="field"><label class="label" data-i18n="settings.xray_api_addr">Xray API addr</label><input id="xray_api_addr" placeholder="127.0.0.1:10085"></div>
+        <div class="field"><label class="label" data-i18n="settings.probe_url">Observatory probe URL</label><input id="probe_url"></div>
+        <div class="field"><label class="label" data-i18n="settings.probe_interval">Observatory interval</label><input id="probe_interval"></div>
+        <button type="submit" data-i18n="common.save">Сохранить</button>
       </form>
     </div>
 
     <div class="card">
-      <h2>iptables / inbounds порты</h2>
+      <h2 data-i18n="settings.iptables_ports">iptables / inbounds порты</h2>
       <form id="iptables-form">
         <div class="grid">
           <div class="field"><label class="label">TCP REDIRECT</label><input id="tcp_port" type="number"></div>
@@ -53,39 +48,85 @@
     </div>
 
     <div class="card">
-      <h2>Xray Routing</h2>
-      <p class="label">Split-tunnel: geosite/geoip, direct / proxy / block, порядок правил и preview цепочки.</p>
-      <a href="/routing"><button type="button">Открыть редактор routing →</button></a>
+      <h2 data-i18n="settings.routing_section">Xray Routing</h2>
+      <p class="label" data-i18n="settings.routing_desc">Split-tunnel: geosite/geoip, direct / proxy / block, порядок правил и preview цепочки.</p>
+      <a href="/routing"><button type="button" data-i18n="settings.open_routing">Открыть редактор routing →</button></a>
     </div>
 
     <div class="card">
-      <h2>Подписки — автообновление</h2>
+      <h2 data-i18n="settings.subs_auto">Подписки — автообновление</h2>
+      <p class="help-text" data-i18n="settings.subs_auto_desc">Периодическая загрузка подписок и выбор серверов без ручного вмешательства.</p>
       <form id="subs-policy-form">
-        <label><input type="checkbox" id="subs_auto_refresh"> Автообновление по расписанию</label>
-        <div class="field"><label class="label">Интервал (минут)</label><input id="subs_interval" type="number" min="5" value="60"></div>
+        <div class="field-row">
+          <label>
+            <input type="checkbox" id="subs_auto_refresh">
+            <span data-i18n="settings.subs_auto_refresh">Автообновление по расписанию</span>
+          </label>
+          <div class="field-desc" data-i18n="settings.subs_auto_refresh_desc">Загружать подписки по URL с заданным интервалом и обновлять список серверов.</div>
+        </div>
+        <div class="field"><label class="label" data-i18n="settings.subs_interval">Интервал (минут)</label><input id="subs_interval" type="number" min="5" value="60"></div>
         <div class="field">
-          <label class="label">При смене серверов в подписке</label>
+          <label class="label" data-i18n="settings.subs_reselect">При смене серверов в подписке</label>
           <select id="subs_reselect">
-            <option value="best_ping">Выбрать с лучшим пингом (TCP)</option>
-            <option value="first">Выбрать первый в списке</option>
-            <option value="keep">Оставить текущий (если есть)</option>
+            <option value="best_ping" data-i18n="settings.subs_best_ping">Выбрать с лучшим пингом (TCP)</option>
+            <option value="first" data-i18n="settings.subs_first">Выбрать первый в списке</option>
+            <option value="keep" data-i18n="settings.subs_keep">Оставить текущий (если есть)</option>
           </select>
         </div>
-        <label><input type="checkbox" id="subs_auto_apply" checked> Автоматически Apply после обновления</label>
-        <button type="submit">Сохранить</button>
+        <div class="field-row">
+          <label>
+            <input type="checkbox" id="subs_auto_apply" checked>
+            <span data-i18n="settings.subs_auto_apply">Автоматически Apply после обновления</span>
+          </label>
+          <div class="field-desc" data-i18n="settings.subs_auto_apply_desc">После обновления подписки пересобрать config, iptables и перезапустить Xray.</div>
+        </div>
+        <button type="submit" data-i18n="common.save">Сохранить</button>
         <p class="label" id="subs-last-refresh"></p>
       </form>
     </div>
 
     <div class="card">
-      <h2>Watchdog</h2>
+      <h2 data-i18n="settings.watchdog">Watchdog (Сторож)</h2>
+      <p class="help-text" data-i18n="settings.watchdog_desc">Следит за VPN: при сбое переключает сервер, обновляет подписки и шлёт уведомления.</p>
       <form id="watchdog-form">
-        <label><input type="checkbox" id="watchdog_enabled"> Включён</label>
-        <div class="field"><label class="label">Интервал (сек)</label><input id="watchdog_interval" type="number" min="15"></div>
-        <label><input type="checkbox" id="watchdog_refresh"> Обновлять подписки при outage</label>
-        <div class="field"><label class="label">Telegram bot token</label><input id="tg_token" type="password" autocomplete="off"></div>
-        <div class="field"><label class="label">Telegram chat id</label><input id="tg_chat"></div>
-        <button type="submit">Сохранить watchdog</button>
+        <div class="field-row">
+          <label>
+            <input type="checkbox" id="watchdog_enabled">
+            <span data-i18n="settings.watchdog_enabled">Включён</span>
+          </label>
+          <div class="field-desc" data-i18n="settings.watchdog_enabled_desc">Периодически проверять работу VPN и реагировать на outage.</div>
+        </div>
+        <div class="field"><label class="label" data-i18n="settings.watchdog_interval">Интервал (сек)</label><input id="watchdog_interval" type="number" min="15"></div>
+        <div class="field-row">
+          <label>
+            <input type="checkbox" id="watchdog_refresh">
+            <span data-i18n="settings.watchdog_refresh">Обновлять подписки при outage</span>
+          </label>
+          <div class="field-desc" data-i18n="settings.watchdog_refresh_desc">При сбое сначала загрузить подписки и попробовать другие серверы из списка.</div>
+        </div>
+
+        <h3 data-i18n="settings.failopen_section">Fail-open (гостевая Wi‑Fi)</h3>
+        <p class="help-text" data-i18n="settings.failopen_desc">Если VPN или iptables не работают — гости не остаются без интернета.</p>
+        <div class="field-row">
+          <label>
+            <input type="checkbox" id="failopen_enabled">
+            <span data-i18n="settings.failopen_enabled">Fail-open: прямой интернет при сбое</span>
+          </label>
+          <div class="field-desc" data-i18n="settings.failopen_enabled_desc">Снять VPN-правила и пустить трафик гостевой сети напрямую через NAT роутера.</div>
+        </div>
+        <div class="field-row">
+          <label>
+            <input type="checkbox" id="failopen_restore">
+            <span data-i18n="settings.failopen_restore">Восстанавливать VPN при recovery</span>
+          </label>
+          <div class="field-desc" data-i18n="settings.failopen_restore_desc">Когда Xray снова заработает — автоматически вернуть маршрутизацию через VPN.</div>
+        </div>
+
+        <h3 data-i18n="settings.telegram_section">Telegram-уведомления</h3>
+        <p class="help-text" data-i18n="settings.telegram_desc">Необязательно. Оставьте пустым, если уведомления не нужны.</p>
+        <div class="field"><label class="label" data-i18n="settings.tg_token">Telegram bot token</label><input id="tg_token" type="password" autocomplete="off"></div>
+        <div class="field"><label class="label" data-i18n="settings.tg_chat">Telegram chat id</label><input id="tg_chat"></div>
+        <button type="submit" data-i18n="settings.save_watchdog">Сохранить watchdog</button>
       </form>
     </div>
 
@@ -144,9 +185,35 @@
       </form>
     </div>
   </main>
+  <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
   <script>
     let cachedSettings = null;
+
+    function escapeHtml(s) {
+      return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function renderGuestNetworkUI(gn) {
+      renderGuestNetworkStatus(document.getElementById('guest-network-status'), gn, escapeHtml);
+      const banner = document.getElementById('guest-network-banner');
+      if (gn && !gn.is_guest && gn.warning) {
+        banner.textContent = gn.warning;
+        banner.hidden = false;
+      } else if (gn && !gn.ok && gn.warning) {
+        banner.textContent = gn.warning;
+        banner.hidden = false;
+      } else {
+        banner.hidden = true;
+      }
+    }
+
+    async function checkGuestNetworkSettings() {
+      const subnet = document.getElementById('guest_subnet').value.trim();
+      const gn = await API.send('POST', '/api/network/guest-check', { guest_subnet: subnet });
+      renderGuestNetworkUI(gn);
+      return gn;
+    }
 
     async function loadSettings() {
       const s = await API.get('/api/settings');
@@ -167,14 +234,16 @@
       document.getElementById('watchdog_enabled').checked = s.watchdog?.enabled !== false;
       document.getElementById('watchdog_interval').value = s.watchdog?.interval_sec || 60;
       document.getElementById('watchdog_refresh').checked = s.watchdog?.refresh_subscriptions_on_outage !== false;
+      document.getElementById('failopen_enabled').checked = s.fail_open?.enabled !== false;
+      document.getElementById('failopen_restore').checked = s.fail_open?.restore_on_recovery !== false;
       document.getElementById('subs_auto_refresh').checked = s.subscriptions_policy?.auto_refresh_enabled !== false;
       document.getElementById('subs_interval').value = s.subscriptions_policy?.auto_refresh_interval_min || 60;
       document.getElementById('subs_reselect').value = s.subscriptions_policy?.reselect_strategy || 'best_ping';
       document.getElementById('subs_auto_apply').checked = s.subscriptions_policy?.auto_apply_on_change !== false;
       const last = s.subscriptions_policy?.last_auto_refresh_at;
       document.getElementById('subs-last-refresh').textContent = last
-        ? 'Последнее автообновление: ' + new Date(last).toLocaleString()
-        : 'Автообновление ещё не выполнялось';
+        ? t('settings.subs_last_refresh', { date: new Date(last).toLocaleString() })
+        : t('settings.subs_never');
       document.getElementById('tg_token').value = s.watchdog?.telegram_bot_token || '';
       document.getElementById('tg_chat').value = s.watchdog?.telegram_chat_id || '';
       document.getElementById('log_startup').value = s.logs?.startup_log || '';
@@ -182,6 +251,10 @@
       document.getElementById('log_access').value = s.logs?.xray_access_log || '';
       document.getElementById('log_error').value = s.logs?.xray_error_log || '';
       document.getElementById('new_username').value = s.auth?.username || '';
+      try {
+        const gn = await API.get('/api/network/guest-check');
+        renderGuestNetworkUI(gn);
+      } catch (_) { /* ignore */ }
     }
 
     function buildPayload(extra = {}) {
@@ -217,7 +290,11 @@
           refresh_subscriptions_on_outage: document.getElementById('watchdog_refresh').checked,
           telegram_bot_token: document.getElementById('tg_token').value,
           telegram_chat_id: document.getElementById('tg_chat').value,
-          last_alert: s.watchdog?.last_alert || '',
+        },
+        fail_open: {
+          enabled: document.getElementById('failopen_enabled').checked,
+          restore_on_recovery: document.getElementById('failopen_restore').checked,
+          marker_path: s.fail_open?.marker_path || '/data/xiaomi-vless-failopen',
         },
         subscriptions_policy: {
           auto_refresh_enabled: document.getElementById('subs_auto_refresh').checked,
@@ -239,7 +316,7 @@
 
     async function saveSettings() {
       await API.send('PUT', '/api/settings', buildPayload());
-      showMsg(document.getElementById('msg'), 'Настройки сохранены', true);
+      showMsg(document.getElementById('msg'), t('settings.saved'), true);
       await loadSettings();
     }
 
@@ -247,6 +324,28 @@
       e.preventDefault();
       try { await saveSettings(); } catch (err) { showMsg(document.getElementById('msg'), err.message); }
     };
+
+    document.getElementById('btn-guest-check').onclick = async () => {
+      try {
+        const gn = await checkGuestNetworkSettings();
+        showMsg(document.getElementById('msg'), gn.message || 'Проверка выполнена', gn.ok);
+      } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+    };
+
+    document.getElementById('btn-guest-suggest').onclick = async () => {
+      try {
+        const gn = await checkGuestNetworkSettings();
+        const suggested = gn.suggested_subnet || gn.detected_subnet;
+        if (suggested) {
+          document.getElementById('guest_subnet').value = suggested;
+          await saveSettings();
+          showMsg(document.getElementById('msg'), 'Подсеть подставлена с роутера', true);
+        } else {
+          showMsg(document.getElementById('msg'), 'Не удалось определить подсеть на br-guest');
+        }
+      } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+    };
+
     document.getElementById('iptables-form').onsubmit = async (e) => {
       e.preventDefault();
       try { await saveSettings(); } catch (err) { showMsg(document.getElementById('msg'), err.message); }
@@ -292,31 +391,29 @@
       } catch (err) { showMsg(document.getElementById('msg'), err.message); }
     };
 
-    loadSettings().catch(e => showMsg(document.getElementById('msg'), e.message));
-
     let updatePoll = null;
     let lastAvailable = null;
 
     function phaseLabel(st) {
       if (!st || typeof st === 'string') {
         const map = {
-          idle: 'Готово',
-          checking: 'Проверка…',
-          downloading: 'Скачивание…',
-          extracting: 'Распаковка…',
-          verified: 'Готово к установке',
-          applying: 'Установка…',
-          restarting: 'Перезапуск…',
-          health_check: 'Проверка после обновления…',
-          completed: 'Обновление завершено',
-          failed: 'Ошибка',
-          rolled_back: 'Откат выполнен',
+          idle: t('update.idle'),
+          checking: t('update.checking'),
+          downloading: t('update.downloading'),
+          extracting: t('update.extracting'),
+          verified: t('update.verified'),
+          applying: t('update.applying'),
+          restarting: t('update.restarting'),
+          health_check: t('update.health_check'),
+          completed: t('update.completed'),
+          failed: t('update.failed'),
+          rolled_back: t('update.rolled_back'),
         };
         return map[st] || st;
       }
       const avail = updateAvailable(st);
-      if (st.phase === 'idle' && avail) return 'Доступно обновление ' + avail;
-      if (st.phase === 'idle') return 'Обновлений нет';
+      if (st.phase === 'idle' && avail) return t('update.available', { version: avail });
+      if (st.phase === 'idle') return t('update.none');
       return phaseLabel(st.phase);
     }
 
@@ -417,7 +514,12 @@
       } catch (err) { showMsg(document.getElementById('msg'), err.message); }
     };
 
-    refreshUpdate().catch(() => {});
+    initI18n().then(() => {
+      renderHeader();
+      applyI18n();
+      loadSettings().catch(e => showMsg(document.getElementById('msg'), e.message));
+      refreshUpdate().catch(() => {});
+    });
   </script>
 </body>
 </html>

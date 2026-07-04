@@ -98,6 +98,14 @@ install_flash_hooks() {
   fi
 }
 
+run_post_update() {
+  if "$PANEL_BIN" -config "$CONFIG" -post-update >> "$HOME/panel-update.log" 2>&1; then
+    log "post-update tasks completed"
+  else
+    log "WARN: post-update failed — panel will retry on startup"
+  fi
+}
+
 do_apply() {
   phase="$(read_phase)"
   case "$phase" in
@@ -114,6 +122,7 @@ do_apply() {
     exit 1
   fi
   install_flash_hooks
+  run_post_update
   write_phase restarting
   restart_panel
   log "panel restarted — health check will run on startup"

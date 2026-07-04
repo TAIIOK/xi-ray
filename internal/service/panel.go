@@ -11,24 +11,28 @@ import (
 )
 
 type PanelService struct {
-	store   *config.Store
-	fetcher *subscription.Fetcher
-	apply   *ApplyService
-	status  *StatusService
+	store    *config.Store
+	fetcher  *subscription.Fetcher
+	apply    *ApplyService
+	status   *StatusService
+	failOpen *FailOpenService
 }
 
 func NewPanelService(store *config.Store) *PanelService {
+	failOpen := NewFailOpenService(store)
 	return &PanelService{
-		store:   store,
-		fetcher: subscription.NewFetcher(),
-		apply:   NewApplyService(store),
-		status:  NewStatusService(store),
+		store:    store,
+		fetcher:  subscription.NewFetcher(),
+		failOpen: failOpen,
+		apply:    NewApplyService(store, failOpen),
+		status:  NewStatusService(store, failOpen),
 	}
 }
 
-func (p *PanelService) Store() *config.Store   { return p.store }
-func (p *PanelService) Apply() *ApplyService   { return p.apply }
-func (p *PanelService) Status() *StatusService { return p.status }
+func (p *PanelService) Store() *config.Store      { return p.store }
+func (p *PanelService) Apply() *ApplyService      { return p.apply }
+func (p *PanelService) Status() *StatusService    { return p.status }
+func (p *PanelService) FailOpen() *FailOpenService { return p.failOpen }
 
 type SubscriptionRefreshResult struct {
 	Nodes            []config.Node `json:"nodes"`
@@ -294,30 +298,57 @@ func (p *PanelService) UpdateSelectionWithApply(ctx context.Context, mode string
 	return result, nil
 }
 
-func (p *PanelService) UpdateSettings(paths config.Paths, network config.Network, iptables config.Iptables, obs config.Observatory, watchdog config.Watchdog, subsPolicy config.SubscriptionsPolicy, logs config.Logs, routing config.Routing) error {
+func (p *PanelService) UpdateSettings(paths config.Paths, networkCfg config.Network, iptables config.Iptables, obs config.Observatory, watchdog config.Watchdog, failOpen config.FailOpen, subsPolicy config.SubscriptionsPolicy, logs config.Logs, routing config.Routing) error {
 	if err := config.ValidatePaths(paths); err != nil {
 		return err
 	}
-	routing.Normalize()
-	if err := config.ValidateRouting(routing); err != nil {
+	subnet := networkCfg.GuestSubnet
+	if subnet == "" {
+		subnet = iptables.GuestSubnet
+	}
+	if norm, err := config.NormalizeGuestSubnet(subnet); err != nil {
 		return err
+	} else {
+		networkCfg.GuestSubnet = norm
+		iptables.GuestSubnet = norm
+	}
+	skipRouting := routing.IsEmptyPayload()
+	if !skipRouting {
+		routing.Normalize()
+		if err := config.ValidateRouting(routing); err != nil {
+			return err
+		}
 	}
 	return p.store.Update(func(cfg *config.PanelConfig) error {
 		cfg.Paths = paths
-		cfg.Network = network
+		cfg.Network = networkCfg
 		cfg.Iptables = iptables
 		if cfg.Iptables.GuestSubnet == "" {
-			cfg.Iptables.GuestSubnet = network.GuestSubnet
+			cfg.Iptables.GuestSubnet = networkCfg.GuestSubnet
 		}
 		if cfg.Network.GuestSubnet == "" {
 			cfg.Network.GuestSubnet = iptables.GuestSubnet
 		}
 		cfg.Observatory = obs
+		prevLastAlert := cfg.Watchdog.LastAlert
 		cfg.Watchdog = watchdog
+		if watchdog.LastAlert == "" && prevLastAlert != "" {
+			cfg.Watchdog.LastAlert = prevLastAlert
+		}
+		cfg.FailOpen = failOpen
 		cfg.SubscriptionsPolicy = subsPolicy
 		cfg.Logs = logs
-		cfg.Routing = routing
+		if !skipRouting {
+			cfg.Routing = routing
+		}
 		cfg.Normalize()
+		return nil
+	})
+}
+
+func (p *PanelService) DismissWatchdogAlert() error {
+	return p.store.Update(func(cfg *config.PanelConfig) error {
+		cfg.Watchdog.LastAlert = ""
 		return nil
 	})
 }

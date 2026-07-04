@@ -36,6 +36,17 @@ func DefaultRouting() Routing {
 	}
 }
 
+// IsEmptyPayload reports whether routing was omitted or sent as {} from the client.
+// Normalize() fills defaults and must not run before this check when deciding to skip an update.
+func (r Routing) IsEmptyPayload() bool {
+	return r.DomainStrategy == "" &&
+		len(r.RuleOrder) == 0 &&
+		r.DefaultGuest == "" &&
+		len(r.Rules) == 0 &&
+		!r.BypassPrivate &&
+		!r.BypassVPNHosts
+}
+
 func (r *Routing) Normalize() {
 	if r.DomainStrategy == "" {
 		r.DomainStrategy = "IPIfNonMatch"

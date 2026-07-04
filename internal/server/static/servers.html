@@ -3,68 +3,84 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Серверы — Xiaomi VLESS</title>
+  <title data-i18n="servers.title">Серверы — Xiaomi VLESS</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header>
-    <strong>Xiaomi VLESS Panel</strong>
-    <nav>
-      <a href="/">Dashboard</a>
-      <a href="/servers" class="active">Серверы</a>
-      <a href="/subscriptions">Подписки</a>
-      <a href="/routing">Routing</a>
-      <a href="/settings">Настройки</a>
-      <a href="/logs">Логи</a>
-      <a href="/logout">Выход</a>
-    </nav>
-  </header>
+  <header id="app-header"></header>
   <main>
     <div id="msg" class="msg" hidden></div>
 
     <div class="card">
-      <h2>Режим выбора</h2>
-      <div class="field">
-        <label><input type="radio" name="mode" value="single" checked> Один сервер</label>
-        <label style="margin-left:1rem"><input type="radio" name="mode" value="multi"> Несколько + failover</label>
+      <h2 data-i18n="servers.selection_mode">Режим выбора</h2>
+      <div class="mode-options">
+        <label class="mode-option">
+          <input type="radio" name="mode" value="single" checked>
+          <div class="mode-option-body">
+            <strong data-i18n="servers.mode_single_title">Один сервер</strong>
+            <span data-i18n="servers.mode_single_desc">Весь трафик гостевой Wi‑Fi идёт через один выбранный сервер.</span>
+          </div>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="mode" value="multi">
+          <div class="mode-option-body">
+            <strong data-i18n="servers.mode_multi_title">Несколько + failover</strong>
+            <span data-i18n="servers.mode_multi_desc">Несколько серверов; при падении Xray переключится на следующий по списку.</span>
+          </div>
+        </label>
       </div>
-      <div class="field">
-        <label><input type="checkbox" id="apply-immediately" checked> Применить сразу (config + iptables + restart)</label>
+      <div class="field-row">
+        <label>
+          <input type="checkbox" id="apply-immediately" checked>
+          <span data-i18n="servers.apply_immediately">Применить сразу</span>
+        </label>
+        <div class="field-desc" data-i18n="servers.apply_immediately_desc">Пересобрать config, iptables и перезапустить Xray после сохранения.</div>
       </div>
-      <button id="btn-save-selection">Сохранить и применить</button>
-      <button id="btn-save-only" class="secondary">Только сохранить</button>
-      <button id="btn-probe" class="secondary">Обновить health</button>
+      <p class="help-text" data-i18n="servers.how_to_use">Как пользоваться: отметьте нужные серверы в таблице ниже → выберите режим → нажмите «Сохранить и применить».</p>
+      <div class="card-actions">
+        <button id="btn-save-selection" data-i18n="servers.save_apply">Сохранить и применить</button>
+        <button id="btn-save-only" class="secondary" data-i18n="servers.save_only">Только сохранить</button>
+        <button id="btn-probe" class="secondary" data-i18n="servers.probe_all">Проверить все серверы</button>
+      </div>
+      <p class="help-text" style="margin-bottom:0" data-i18n="servers.probe_all_hint">Проверяет TCP-доступность и прохождение трафика через Xray для каждого сервера.</p>
     </div>
 
     <div class="card">
-      <h2>Добавить VLESS вручную</h2>
+      <h2 data-i18n="servers.add_manual">Добавить VLESS вручную</h2>
       <div class="field">
         <textarea id="manual-link" rows="3" placeholder="vless://..."></textarea>
       </div>
-      <button id="btn-add-manual">Добавить</button>
+      <button id="btn-add-manual" data-i18n="servers.add_manual_btn">Добавить</button>
     </div>
 
     <div class="card">
-      <h2>Список серверов</h2>
+      <h2 data-i18n="servers.server_list">Список серверов</h2>
       <table>
         <thead>
           <tr>
-            <th></th>
-            <th>Имя</th>
-            <th>Адрес</th>
-            <th>Security</th>
-            <th>Health</th>
-            <th></th>
+            <th data-i18n="servers.col_active">Активен</th>
+            <th data-i18n="servers.col_name">Имя</th>
+            <th data-i18n="servers.col_address">Адрес</th>
+            <th data-i18n="servers.col_security">Security</th>
+            <th data-i18n="servers.col_tcp">TCP</th>
+            <th data-i18n="servers.col_xray">Xray</th>
+            <th data-i18n="servers.col_actions">Действия</th>
           </tr>
         </thead>
         <tbody id="nodes-body"></tbody>
       </table>
     </div>
   </main>
+  <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
   <script>
     let nodes = [];
     let selection = { mode: 'single', active_node_ids: [], fallback_order: [] };
+
+    function pingLabel(health, latencyMs) {
+      const h = health || t('common.unknown');
+      return h + (latencyMs ? ' (' + latencyMs + t('common.ms') + ')' : '');
+    }
 
     function renderNodes() {
       const tbody = document.getElementById('nodes-body');
@@ -72,25 +88,62 @@
       const active = new Set(selection.active_node_ids || []);
       nodes.forEach(n => {
         const tr = document.createElement('tr');
+        tr.dataset.id = n.id;
         tr.innerHTML = `
           <td><input type="checkbox" data-id="${n.id}" ${active.has(n.id) ? 'checked' : ''}></td>
           <td>${escapeHtml(n.name)}</td>
           <td>${escapeHtml(n.address)}:${n.port}</td>
           <td>${escapeHtml(n.security)} / ${escapeHtml(n.network)}</td>
-          <td class="${healthClass(n.last_health)}">${n.last_health || 'unknown'}${n.last_latency_ms ? ' ('+n.last_latency_ms+'ms)' : ''}</td>
-          <td><button class="danger" data-del="${n.id}">×</button></td>`;
+          <td class="health-cell ${healthClass(n.last_health)}">${escapeHtml(pingLabel(n.last_health, n.last_latency_ms))}</td>
+          <td class="health-cell ${healthClass(n.last_xray_health)}">${escapeHtml(pingLabel(n.last_xray_health, n.last_xray_latency_ms))}</td>
+          <td class="actions-cell">
+            <button class="secondary btn-sm btn-ping" data-ping="${n.id}">${t('common.ping')}</button>
+            <button class="danger btn-sm" data-del="${n.id}">×</button>
+          </td>`;
         tbody.appendChild(tr);
       });
       tbody.querySelectorAll('[data-del]').forEach(btn => {
         btn.onclick = async () => {
-          if (!confirm('Удалить сервер?')) return;
+          if (!confirm(t('servers.confirm_delete'))) return;
           await API.send('DELETE', '/api/nodes/' + btn.dataset.del);
+          showMsg(document.getElementById('msg'), t('servers.server_deleted'), true);
           await loadNodes();
         };
+      });
+      tbody.querySelectorAll('[data-ping]').forEach(btn => {
+        btn.onclick = () => pingNode(btn);
       });
       document.querySelectorAll('input[name=mode]').forEach(r => {
         r.checked = r.value === (selection.mode || 'single');
       });
+    }
+
+    async function pingNode(btn) {
+      const id = btn.dataset.ping;
+      try {
+        const res = await withButtonBusy(btn, t('servers.ping_busy'), () =>
+          API.send('POST', '/api/nodes/' + id + '/ping', {})
+        );
+        const row = btn.closest('tr');
+        const cells = row.querySelectorAll('.health-cell');
+        if (cells[0]) {
+          cells[0].className = 'health-cell ' + healthClass(res.health);
+          cells[0].textContent = pingLabel(res.health, res.latency_ms);
+        }
+        if (cells[1]) {
+          cells[1].className = 'health-cell ' + healthClass(res.xray_health);
+          cells[1].textContent = pingLabel(res.xray_health, res.xray_latency_ms);
+        }
+        const node = nodes.find(n => n.id === id);
+        if (node) {
+          node.last_health = res.health;
+          node.last_latency_ms = res.latency_ms;
+          node.last_xray_health = res.xray_health;
+          node.last_xray_latency_ms = res.xray_latency_ms;
+        }
+      } catch (e) {
+        showMsg(document.getElementById('msg'), e.message);
+      }
     }
 
     function escapeHtml(s) {
@@ -111,14 +164,13 @@
     async function saveSelection(apply) {
       const mode = document.querySelector('input[name=mode]:checked').value;
       const ids = selectedIDs();
-      if (!ids.length) throw new Error('Выберите хотя бы один сервер');
-      const res = await API.send('PUT', '/api/selection', {
+      if (!ids.length) throw new Error(t('servers.select_one'));
+      return API.send('PUT', '/api/selection', {
         mode,
         active_node_ids: ids,
         fallback_order: ids,
         apply,
       });
-      return res;
     }
 
     document.getElementById('btn-save-selection').onclick = async () => {
@@ -139,26 +191,34 @@
     };
 
     document.getElementById('btn-probe').onclick = async () => {
+      const btn = document.getElementById('btn-probe');
       try {
-        const obs = await API.send('POST', '/api/nodes/probe', { node_ids: selectedIDs() });
-        showMsg(document.getElementById('msg'), 'Health обновлён', true);
+        await withButtonBusy(btn, t('common.updating'), () =>
+          API.send('POST', '/api/nodes/probe', { node_ids: [] })
+        );
+        showMsg(document.getElementById('msg'), t('servers.health_updated'), true);
         await loadNodes();
-        if (obs.nodes?.length) renderNodes();
       } catch (e) { showMsg(document.getElementById('msg'), e.message); }
     };
 
     document.getElementById('btn-add-manual').onclick = async () => {
       try {
         const link = document.getElementById('manual-link').value.trim();
-        if (!link) throw new Error('Вставьте vless:// ссылку');
+        if (!link) throw new Error(t('servers.paste_vless'));
         await API.send('POST', '/api/nodes/manual', { link });
         document.getElementById('manual-link').value = '';
-        showMsg(document.getElementById('msg'), 'Сервер добавлен', true);
+        showMsg(document.getElementById('msg'), t('servers.server_added'), true);
         await loadNodes();
       } catch (e) { showMsg(document.getElementById('msg'), e.message); }
     };
 
-    loadNodes().catch(e => showMsg(document.getElementById('msg'), e.message));
+    document.addEventListener('DOMContentLoaded', () => {
+      initI18n().then(() => {
+        renderHeader();
+        applyI18n();
+        loadNodes().catch(e => showMsg(document.getElementById('msg'), e.message));
+      });
+    });
   </script>
 </body>
 </html>

@@ -40,7 +40,12 @@ make lab-up
 | `make lab-status` | Сервисы, iptables, проверка SOCKS |
 | `make lab-guest-test` | Guest netns и проверка связности |
 | `make lab-deploy` | Собрать и заменить только panel (VM не трогаем) |
-| `make lab-deploy-full` | Полный redeploy: panel + скрипты + systemd, `panel.json` сохраняется |
+| `make lab-deploy-full` | Полный redeploy: panel + скрипты + systemd + **чистый** `panel.json` (без серверов, onboarding заново) |
+| `make lab-reset-password` | Сбросить только пароль на `admin` / `admin` |
+
+**Сохранить настройки** при full deploy: `./lab/scripts/lab-deploy.sh --full --keep-config`
+
+После `lab-deploy-full`: логин **`admin` / `admin`**, onboarding с нуля, серверов нет.
 
 ## Обновление билда без пересоздания VM
 
@@ -48,8 +53,8 @@ make lab-up
 
 ```bash
 make lab-deploy          # быстро: новый panel + restart
-make lab-deploy-full     # panel + iptables/startup скрипты + systemd
-./lab/scripts/lab-deploy.sh --full --reset   # + сброс panel.json на шаблон
+make lab-deploy-full     # panel + скрипты + systemd + чистый panel.json
+./lab/scripts/lab-deploy.sh --full --keep-config   # full deploy, сохранить panel.json
 ```
 
 Или напрямую:

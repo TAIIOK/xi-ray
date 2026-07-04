@@ -3,49 +3,43 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Подписки — Xiaomi VLESS</title>
+  <title data-i18n="subscriptions.title">Подписки — Xiaomi VLESS</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header>
-    <strong>Xiaomi VLESS Panel</strong>
-    <nav>
-      <a href="/">Dashboard</a>
-      <a href="/servers">Серверы</a>
-      <a href="/subscriptions" class="active">Подписки</a>
-      <a href="/routing">Routing</a>
-      <a href="/settings">Настройки</a>
-      <a href="/logs">Логи</a>
-      <a href="/logout">Выход</a>
-    </nav>
-  </header>
+  <header id="app-header"></header>
   <main>
     <div id="msg" class="msg" hidden></div>
 
     <div class="card">
-      <h2>Добавить подписку</h2>
+      <h2 data-i18n="subscriptions.add">Добавить подписку</h2>
       <div class="field">
-        <label class="label">Название</label>
+        <label class="label" data-i18n="subscriptions.name">Название</label>
         <input id="sub-name" placeholder="My subscription">
       </div>
       <div class="field">
-        <label class="label">URL подписки</label>
+        <label class="label" data-i18n="subscriptions.url">URL подписки</label>
         <input id="sub-url" placeholder="https://...">
       </div>
-      <button id="btn-add-sub">Добавить и загрузить</button>
+      <button id="btn-add-sub" data-i18n="subscriptions.add_load">Добавить и загрузить</button>
     </div>
 
     <div class="card">
-      <h2>Подписки</h2>
+      <h2 data-i18n="subscriptions.list">Подписки</h2>
       <p class="label" id="policy-hint"></p>
       <table>
         <thead>
-          <tr><th>Название</th><th>Обновлено</th><th></th></tr>
+          <tr>
+            <th data-i18n="subscriptions.name">Название</th>
+            <th data-i18n="subscriptions.col_updated">Обновлено</th>
+            <th></th>
+          </tr>
         </thead>
         <tbody id="subs-body"></tbody>
       </table>
     </div>
   </main>
+  <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
   <script>
     async function loadSubs() {
@@ -57,10 +51,15 @@
       const pol = settings.subscriptions_policy || {};
       const hint = document.getElementById('policy-hint');
       if (hint) {
-        const strat = { best_ping: 'лучший пинг', first: 'первый', keep: 'оставить текущий' }[pol.reselect_strategy] || pol.reselect_strategy;
+        const stratMap = {
+          best_ping: t('subscriptions.strat_best_ping'),
+          first: t('subscriptions.strat_first'),
+          keep: t('subscriptions.strat_keep'),
+        };
+        const strat = stratMap[pol.reselect_strategy] || pol.reselect_strategy;
         hint.textContent = pol.auto_refresh_enabled
-          ? `Автообновление каждые ${pol.auto_refresh_interval_min || 60} мин · стратегия: ${strat}`
-          : 'Автообновление выключено — см. Настройки';
+          ? t('subscriptions.auto_on', { min: pol.auto_refresh_interval_min || 60, strat })
+          : t('subscriptions.auto_off');
       }
       const tbody = document.getElementById('subs-body');
       tbody.innerHTML = '';
@@ -68,22 +67,22 @@
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${escapeHtml(s.name)}</td>
-          <td>${s.updated_at ? new Date(s.updated_at).toLocaleString() : '—'}</td>
+          <td>${s.updated_at ? new Date(s.updated_at).toLocaleString() : t('common.empty')}</td>
           <td>
-            <button data-refresh="${s.id}" class="secondary">Обновить</button>
-            <button data-del="${s.id}" class="danger">Удалить</button>
+            <button data-refresh="${s.id}" class="secondary">${t('subscriptions.refresh')}</button>
+            <button data-del="${s.id}" class="danger">${t('common.delete')}</button>
           </td>`;
         tbody.appendChild(tr);
       });
       tbody.querySelectorAll('[data-refresh]').forEach(btn => {
         btn.onclick = async () => {
           try {
-            const res = await withButtonBusy(btn, 'Загрузка…', () =>
+            const res = await withButtonBusy(btn, t('common.loading'), () =>
               API.send('POST', '/api/subscriptions/' + btn.dataset.refresh + '/refresh')
             );
-            let msg = 'Загружено серверов: ' + (res.nodes?.length || 0);
-            if (res.selection_changed) msg += ' · выбран новый сервер';
-            if (res.apply) msg += res.apply.ok ? ' · Apply OK' : ' · Apply: ' + res.apply.message;
+            let msg = t('subscriptions.loaded_nodes', { count: res.nodes?.length || 0 });
+            if (res.selection_changed) msg += t('subscriptions.selection_changed');
+            if (res.apply) msg += res.apply.ok ? t('subscriptions.apply_ok') : t('subscriptions.apply_fail', { msg: res.apply.message });
             showMsg(document.getElementById('msg'), msg, !res.apply || res.apply.ok);
             await loadSubs();
           } catch (e) { showMsg(document.getElementById('msg'), e.message); }
@@ -91,9 +90,9 @@
       });
       tbody.querySelectorAll('[data-del]').forEach(btn => {
         btn.onclick = async () => {
-          if (!confirm('Удалить подписку и её серверы?')) return;
+          if (!confirm(t('subscriptions.confirm_delete'))) return;
           await API.send('DELETE', '/api/subscriptions/' + btn.dataset.del);
-          showMsg(document.getElementById('msg'), 'Удалено', true);
+          showMsg(document.getElementById('msg'), t('subscriptions.deleted'), true);
           await loadSubs();
         };
       });
@@ -108,17 +107,21 @@
       try {
         const name = document.getElementById('sub-name').value.trim() || 'Subscription';
         const url = document.getElementById('sub-url').value.trim();
-        if (!url) throw new Error('URL обязателен');
-        const res = await withButtonBusy(btn, 'Загрузка…', () =>
+        if (!url) throw new Error(t('subscriptions.url_required'));
+        const res = await withButtonBusy(btn, t('common.loading'), () =>
           API.send('POST', '/api/subscriptions', { name, url })
         );
-        showMsg(document.getElementById('msg'), 'Добавлено серверов: ' + (res.nodes?.length || 0), true);
+        showMsg(document.getElementById('msg'), t('subscriptions.added_nodes', { count: res.nodes?.length || 0 }), true);
         document.getElementById('sub-url').value = '';
         await loadSubs();
       } catch (e) { showMsg(document.getElementById('msg'), e.message); }
     };
 
-    loadSubs().catch(e => showMsg(document.getElementById('msg'), e.message));
+    initI18n().then(() => {
+      renderHeader();
+      applyI18n();
+      loadSubs().catch(e => showMsg(document.getElementById('msg'), e.message));
+    });
   </script>
 </body>
 </html>

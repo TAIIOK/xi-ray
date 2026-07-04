@@ -3,8 +3,8 @@
 #
 # Usage:
 #   ./lab/scripts/lab-deploy.sh              # panel binary only
-#   ./lab/scripts/lab-deploy.sh --full         # panel + scripts + systemd, keep panel.json
-#   ./lab/scripts/lab-deploy.sh --full --reset # full redeploy + reset panel.json
+#   ./lab/scripts/lab-deploy.sh --full         # full redeploy + clean panel.json (fresh lab)
+#   ./lab/scripts/lab-deploy.sh --full --keep-config  # full redeploy, keep nodes/settings
 #   make lab-deploy
 #   make lab-deploy-full
 #
@@ -19,20 +19,23 @@ SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 lab_common_init
 
 MODE="panel"
-RESET_CONFIG=0
+KEEP_CONFIG=0
 
 for arg in "$@"; do
   case "$arg" in
     --full) MODE="full" ;;
-    --reset|--reset-config) RESET_CONFIG=1 ;;
+    --keep-config) KEEP_CONFIG=1 ;;
+    --reset|--reset-config)
+      lab_log "note: --reset is default for --full; use --keep-config to preserve panel.json"
+      ;;
     --panel) MODE="panel" ;;
     -h|--help)
       cat <<'EOF'
-Usage: lab-deploy.sh [--panel|--full] [--reset]
+Usage: lab-deploy.sh [--panel|--full] [--keep-config]
 
   --panel (default)  Build and replace panel binary, restart service
-  --full             Redeploy panel + router scripts + systemd units
-  --reset            With --full: overwrite panel.json with lab template
+  --full             Redeploy panel + scripts + systemd; reset panel.json to lab template
+  --keep-config      With --full: keep existing panel.json (nodes, password, routing)
 
 Environment: LAB_SKIP_BUILD=1, LAB_VM_NAME=...
 EOF
@@ -63,12 +66,16 @@ case "$MODE" in
     lab_log "panel restarted"
     ;;
   full)
-    lab_log "full redeploy to $LAB_VM_NAME (VM stays running)"
-    lab_transfer_staging "$PANEL_BIN"
-    if [ "$RESET_CONFIG" = "1" ]; then
-      lab_run_provision 0 1
+    if [ "$KEEP_CONFIG" = "1" ]; then
+      lab_log "full redeploy to $LAB_VM_NAME (keeping panel.json)"
     else
+      lab_log "full redeploy to $LAB_VM_NAME (reset panel.json + runtime state)"
+    fi
+    lab_transfer_staging "$PANEL_BIN"
+    if [ "$KEEP_CONFIG" = "1" ]; then
       lab_run_provision 1 0
+    else
+      lab_run_provision 0 1
     fi
     lab_log "full redeploy complete"
     ;;
