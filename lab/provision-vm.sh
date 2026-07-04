@@ -20,16 +20,32 @@ chmod 755 "$INSTALL_DIR"
 install_panel_binary() {
   src=$1
   dst="${INSTALL_DIR}/panel"
-  if systemctl is-active --quiet xiaomi-vless-panel.service 2>/dev/null; then
-    log "stopping panel service before binary update"
-    systemctl stop xiaomi-vless-panel.service
-  fi
+  systemctl stop xiaomi-vless-panel.service 2>/dev/null || true
+  killall panel 2>/dev/null || true
+  sleep 1
   if [ -f "$dst" ]; then
     cp "$dst" "${dst}.previous"
   fi
   cp "$src" "${dst}.new"
   mv "${dst}.new" "$dst"
   chmod 755 "$dst"
+}
+
+start_panel_service() {
+  systemctl stop xiaomi-vless-panel.service 2>/dev/null || true
+  killall panel 2>/dev/null || true
+  sleep 1
+  systemctl reset-failed xiaomi-vless-panel.service 2>/dev/null || true
+  systemctl start xiaomi-vless-panel.service
+  i=0
+  while [ "$i" -lt 15 ]; do
+    if systemctl is-active --quiet xiaomi-vless-panel.service; then
+      return 0
+    fi
+    i=$((i + 1))
+    sleep 1
+  done
+  return 1
 }
 
 if [ -n "${LAB_PANEL_BIN:-}" ] && [ -f "$LAB_PANEL_BIN" ]; then
@@ -93,6 +109,18 @@ install_script() {
 for script in startup_xray_guest.sh xray-guest-iptables.sh xray-guest-iptables-cron.sh xray-guest-sysctl.sh xiaomi-vless-failopen-guard.sh boot-xiaomi-vless.sh; do
   install_script "$script"
 done
+
+if [ -f "${STAGING}/panel-updater.sh" ]; then
+  cp "${STAGING}/panel-updater.sh" "${INSTALL_DIR}/panel-updater.sh"
+  chmod +x "${INSTALL_DIR}/panel-updater.sh"
+  log "panel-updater.sh installed from staging"
+elif [ -f "${REPO}/deploy/panel-updater.sh" ]; then
+  cp "${REPO}/deploy/panel-updater.sh" "${INSTALL_DIR}/panel-updater.sh"
+  chmod +x "${INSTALL_DIR}/panel-updater.sh"
+  log "panel-updater.sh installed"
+else
+  die "missing deploy/panel-updater.sh"
+fi
 
 for script in network-setup.sh guest-netns.sh; do
   if [ -f "${STAGING}/${script}" ]; then
@@ -182,13 +210,11 @@ EOF
 systemctl daemon-reload
 systemctl enable xiaomi-vless-network.service xiaomi-vless-panel.service
 systemctl restart xiaomi-vless-network.service
-systemctl restart xiaomi-vless-panel.service
-
-sleep 2
-if systemctl is-active --quiet xiaomi-vless-panel.service; then
+if start_panel_service; then
   log "panel service is running"
 else
-  log "WARN: panel service failed — check: journalctl -u xiaomi-vless-panel -n 50"
+  log "ERROR: panel service failed — check: journalctl -u xiaomi-vless-panel -n 50"
+  exit 1
 fi
 
 log "provision complete"

@@ -1,0 +1,14 @@
+package update
+
+import "testing"
+
+func TestParsePanelVersionLine(t *testing.T) {
+	got := parsePanelVersionLine("xiaomi-vless v0.2.0 (abc123, 2026-07-04T10:00:00Z)")
+	if got != "0.2.0" {
+		t.Fatalf("got %q", got)
+	}
+	got = parsePanelVersionLine("xiaomi-vless v0.3.0-dirty (abc, date)")
+	if got != "0.3.0-dirty" {
+		t.Fatalf("got %q", got)
+	}
+}

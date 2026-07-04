@@ -179,6 +179,6 @@ func CLIRollback(home string) error {
 		_ = copyDir(layout.ScriptsPrevDir, layout.ScriptsDir)
 	}
 	st, _ := store.Load()
-	st.Phase = PhaseRolledBack
+	st.Phase = PhaseRestarting
 	return store.Save(st)
 }

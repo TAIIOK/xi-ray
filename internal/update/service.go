@@ -19,6 +19,7 @@ type StatusResponse struct {
 	CurrentVersion  string       `json:"current_version"`
 	CurrentCommit   string       `json:"current_commit"`
 	PreviousVersion string       `json:"previous_version,omitempty"`
+	RollbackVersion string       `json:"rollback_version,omitempty"`
 	Phase           Phase        `json:"phase"`
 	TargetVersion   string       `json:"target_version,omitempty"`
 	Progress        float64      `json:"progress,omitempty"`
@@ -52,6 +53,8 @@ func NewService(home, configPath string, cfg func() config.PanelConfig) *Service
 func (s *Service) Layout() Layout { return s.layout }
 
 func (s *Service) Status(ctx context.Context) (StatusResponse, error) {
+	_ = s.layout.EnsureUpdaterScript()
+
 	st, err := s.store.Load()
 	if err != nil {
 		return StatusResponse{}, err
@@ -66,17 +69,26 @@ func (s *Service) Status(ctx context.Context) (StatusResponse, error) {
 		Phase:          st.Phase,
 		TargetVersion:  st.TargetVersion,
 		Error:          st.Error,
-		CanRollback:    s.layout.HasPrevious(),
+		CanRollback:    s.layout.HasPrevious() && s.layout.UpdaterReady(),
 		CanApply:       st.Phase == PhaseVerified,
 		CanDownload:    st.Phase == PhaseIdle || st.Phase == PhaseFailed || st.Phase == PhaseRolledBack || st.Phase == PhaseDownloading,
 	}
 	if st.TotalBytes > 0 {
 		resp.Progress = float64(st.DownloadedBytes) / float64(st.TotalBytes) * 100
 	}
-	if st.PreviousVersion != "" {
+	if s.layout.HasPrevious() {
+		if v := s.layout.PreviousPanelVersion(); v != "" {
+			resp.RollbackVersion = v
+			resp.PreviousVersion = v
+		} else if st.PreviousVersion != "" {
+			resp.PreviousVersion = st.PreviousVersion
+			resp.RollbackVersion = st.PreviousVersion
+		} else {
+			resp.PreviousVersion = "previous"
+			resp.RollbackVersion = "previous"
+		}
+	} else if st.PreviousVersion != "" {
 		resp.PreviousVersion = st.PreviousVersion
-	} else if s.layout.HasPrevious() {
-		resp.PreviousVersion = "previous"
 	}
 	if st.TargetVersion != "" && IsUpdateAvailable(st.TargetVersion, version.Version) {
 		resp.Available = &ReleaseInfo{
@@ -242,8 +254,11 @@ func (s *Service) Apply(ctx context.Context) (StatusResponse, error) {
 	if st.Phase != PhaseVerified {
 		return StatusResponse{}, fmt.Errorf("cannot apply in phase %s", st.Phase)
 	}
-	if _, err := os.Stat(s.layout.UpdaterScript); err != nil {
-		return StatusResponse{}, fmt.Errorf("updater script missing: %w", err)
+	if err := s.layout.EnsureUpdaterScript(); err != nil {
+		return StatusResponse{}, fmt.Errorf("install updater script: %w", err)
+	}
+	if !s.layout.UpdaterReady() {
+		return StatusResponse{}, fmt.Errorf("updater script missing: %s", s.layout.UpdaterScript)
 	}
 
 	st.Phase = PhaseApplying
@@ -261,16 +276,28 @@ func (s *Service) Apply(ctx context.Context) (StatusResponse, error) {
 }
 
 func (s *Service) Rollback(ctx context.Context) (StatusResponse, error) {
+	if err := s.layout.EnsureUpdaterScript(); err != nil {
+		return StatusResponse{}, fmt.Errorf("install updater script: %w", err)
+	}
 	if !s.layout.HasPrevious() {
-		return StatusResponse{}, fmt.Errorf("no previous version to rollback")
+		return StatusResponse{}, fmt.Errorf("no previous version to rollback (panel.previous missing)")
 	}
-	if _, err := os.Stat(s.layout.UpdaterScript); err != nil {
-		return StatusResponse{}, fmt.Errorf("updater script missing: %w", err)
+	if !s.layout.UpdaterReady() {
+		return StatusResponse{}, fmt.Errorf("updater script missing: %s", s.layout.UpdaterScript)
 	}
-	cmd := exec.CommandContext(ctx, s.layout.UpdaterScript, "rollback")
-	cmd.Dir = s.layout.Home
-	if err := cmd.Run(); err != nil {
+	st, err := s.store.Load()
+	if err != nil {
 		return StatusResponse{}, err
+	}
+	st.Phase = PhaseRestarting
+	if err := s.store.Save(st); err != nil {
+		return StatusResponse{}, err
+	}
+	cmd := exec.Command("nohup", s.layout.UpdaterScript, "rollback")
+	cmd.Dir = s.layout.Home
+	if err := cmd.Start(); err != nil {
+		_ = s.store.Fail(st, PhaseFailed, err)
+		return s.Status(ctx)
 	}
 	return s.Status(ctx)
 }

@@ -162,9 +162,11 @@
       <h2 data-i18n="settings.panel_update">Обновление panel</h2>
       <p class="label">Безопасное обновление с GitHub Releases. При ошибке доступен откат на предыдущую версию.</p>
       <div id="update-info">
-        <p><span class="label">Текущая версия:</span> <strong id="upd-current">—</strong></p>
-        <p><span class="label">Доступная:</span> <strong id="upd-available">—</strong></p>
-        <p><span class="label">Статус:</span> <span id="upd-phase">—</span></p>
+        <p><span class="label" data-i18n="settings.current_version">Текущая версия:</span> <strong id="upd-current">—</strong></p>
+        <p><span class="label" data-i18n="settings.available_version">Доступная:</span> <strong id="upd-available">—</strong></p>
+        <p><span class="label" data-i18n="settings.rollback_to">Откат на:</span> <strong id="upd-rollback">—</strong></p>
+        <p class="help-text" id="upd-rollback-hint" hidden data-i18n="settings.rollback_hint">Доступно после обновления panel, когда сохранён panel.previous.</p>
+        <p><span class="label" data-i18n="settings.update_status">Статус:</span> <span id="upd-phase">—</span></p>
         <div id="upd-progress-wrap" hidden>
           <div class="label">Прогресс</div>
           <progress id="upd-progress" max="100" value="0"></progress>
@@ -177,7 +179,7 @@
         <button type="button" id="btn-upd-download" class="secondary" disabled>Скачать</button>
         <button type="button" id="btn-upd-apply" disabled>Обновить</button>
         <button type="button" id="btn-upd-cancel" class="secondary" disabled>Отмена</button>
-        <button type="button" id="btn-upd-rollback" class="secondary" disabled>Откатить</button>
+        <button type="button" id="btn-upd-rollback" class="secondary" disabled data-i18n="settings.rollback">Откатить</button>
         <button type="button" id="btn-upd-confirm" class="secondary" hidden>Подтвердить</button>
       </div>
     </div>
@@ -450,11 +452,32 @@
       return phaseLabel(st.phase);
     }
 
+    function rollbackLabel(st) {
+      const ver = st.rollback_version || st.previous_version;
+      if (!ver || ver === 'previous') return t('settings.rollback');
+      return t('settings.rollback_to_version', { version: ver });
+    }
+
     function renderUpdate(st) {
       document.getElementById('upd-current').textContent = (st.current_version || 'dev') + (st.current_commit ? ' (' + st.current_commit + ')' : '');
       const avail = updateAvailable(st) || '—';
       if (st.available) lastAvailable = st.available;
       document.getElementById('upd-available').textContent = avail;
+      const rollbackEl = document.getElementById('upd-rollback');
+      const rollbackHint = document.getElementById('upd-rollback-hint');
+      if (st.can_rollback && (st.rollback_version || st.previous_version)) {
+        const ver = st.rollback_version || st.previous_version;
+        rollbackEl.textContent = ver === 'previous' ? t('settings.rollback_unknown_version') : ver;
+        rollbackHint.hidden = true;
+      } else if (st.rollback_version || (st.previous_version && st.previous_version !== 'previous')) {
+        rollbackEl.textContent = st.rollback_version || st.previous_version;
+        rollbackHint.hidden = false;
+      } else {
+        rollbackEl.textContent = '—';
+        rollbackHint.hidden = false;
+      }
+      const rollbackBtn = document.getElementById('btn-upd-rollback');
+      rollbackBtn.textContent = st.can_rollback ? rollbackLabel(st) : t('settings.rollback');
       document.getElementById('upd-phase').textContent = phaseLabel(st);
       const errEl = document.getElementById('upd-error');
       if (st.error) {
@@ -534,13 +557,21 @@
     };
 
     document.getElementById('btn-upd-rollback').onclick = async () => {
-      if (!confirm('Откатить panel на предыдущую версию?')) return;
+      const st = await API.get('/api/update/status', { timeoutMs: 10000 });
+      const target = st.rollback_version || st.previous_version || '?';
+      const msg = target === 'previous' || target === '?'
+        ? t('settings.rollback_confirm_unknown')
+        : t('settings.rollback_confirm', { version: target, current: st.current_version || 'dev' });
+      if (!confirm(msg)) return;
+      const btn = document.getElementById('btn-upd-rollback');
       try {
-        const st = await API.send('POST', '/api/update/rollback', {});
-        renderUpdate(st);
-        showMsg(document.getElementById('msg'), 'Откат выполнен', true);
-        setTimeout(() => location.reload(), 3000);
-      } catch (err) { showMsg(document.getElementById('msg'), err.message); }
+        await withButtonBusy(btn, t('update.restarting'), () => API.send('POST', '/api/update/rollback', {}));
+        showMsg(document.getElementById('msg'), t('settings.rollback_started', { version: target }), true);
+      } catch (err) {
+        // Panel restarts during rollback — connection drop is expected.
+        showMsg(document.getElementById('msg'), t('settings.rollback_started', { version: target }), true);
+      }
+      setTimeout(() => location.reload(), 5000);
     };
 
     document.getElementById('btn-upd-confirm').onclick = async () => {

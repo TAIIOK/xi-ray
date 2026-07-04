@@ -38,6 +38,6 @@ test -f "$HOME/panel.previous"
 echo "== rollback =="
 "$HOME/panel" -config "$HOME/panel.json" -update-home "$HOME" -update-rollback
 phase="$("$HOME/panel" -config "$HOME/panel.json" -update-home "$HOME" -update-get-phase)"
-test "$phase" = "rolled_back"
+test "$phase" = "restarting"
 
 echo "OK: update smoke tests passed"

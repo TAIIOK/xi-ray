@@ -151,6 +151,7 @@ multipass transfer "${REPO_ROOT}/lab/panel.json" "${VM_NAME}:/tmp/panel-lab.json
 for script in startup_xray_guest.sh xray-guest-iptables.sh xray-guest-iptables-cron.sh xray-guest-sysctl.sh xiaomi-vless-failopen-guard.sh boot-xiaomi-vless.sh; do
   multipass transfer "${REPO_ROOT}/scripts/${script}" "${VM_NAME}:/tmp/${script}"
 done
+multipass transfer "${REPO_ROOT}/deploy/panel-updater.sh" "${VM_NAME}:/tmp/panel-updater.sh"
 for script in network-setup.sh guest-netns.sh; do
   multipass transfer "${REPO_ROOT}/lab/${script}" "${VM_NAME}:/tmp/${script}"
 done
