@@ -1,16 +1,23 @@
 # Xiaomi VLESS Panel
 
-Лёгкая веб-панель для **Xiaomi BE7000**: мониторинг Xray/VLESS, подписки, выбор серверов и failover для гостевой Wi‑Fi.
+Лёгкая веб-панель для **Xiaomi BE7000**: управление Xray/VLESS, подписками и failover VPN **только для гостевой Wi‑Fi**. Основная домашняя сеть остаётся без прокси.
 
-## Возможности
+> **Статус проекта:** это **не готовое продуктовое решение**, а экспериментальный репозиторий **для ознакомления и самостоятельной доработки**. Ожидайте ручной настройки, зависимости от USB и особенностей прошивки Xiaomi. Используйте на свой риск.
 
-- Dashboard: статус Xray, exit IP, iptables counters
-- Подписки: добавление URL, обновление, парсинг `vless://`
-- Серверы: ручной импорт, single/multi режим, failover через Xray Observatory
-- Apply: генерация `config.json`, `xray -test`, restart через startup script
-- Настройки путей, пароля, observatory probe
+**Полная документация:** [docs/](docs/README.md)
 
-## Архитектура
+---
+
+## Что делает сервис
+
+
+| Компонент                | Назначение                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------ |
+| **Веб-панель** (`:7777`) | Dashboard, подписки, выбор серверов, настройки, логи, обновления                     |
+| **Xray**                 | VLESS-клиент с прозрачным прокси (REDIRECT TCP + TProxy UDP)                         |
+| **iptables**             | Перенаправление трафика **только** гостевой подсети (`192.168.33.0/24` по умолчанию) |
+| **Автозапуск**           | Скрипты на flash роутера + hotplug USB + cron/procd                                  |
+
 
 ```
 Browser (LAN) → Go panel (:7777) → panel.json
@@ -18,239 +25,144 @@ Browser (LAN) → Go panel (:7777) → panel.json
                               → startup_xray_guest.sh → iptables
 ```
 
-Гостевая сеть `192.168.33.0/24` проксируется через Xray. Основная LAN без VPN.
+**Возможности панели:** мониторинг Xray и exit IP, импорт подписок и `vless://`, single/multi режим с failover (Xray Observatory), генерация `config.json`, `xray -test`, self-update из GitHub Releases.
 
-## Сборка
+---
 
-```bash
-make tidy
-make test
-make build-arm64
-```
 
-Бинарник: `dist/panel-linux-arm64`
 
-### Установка с GitHub Release (роутер)
+## Подготовка (кратко)
 
-**Вариант 1 — одна команда** (скачать последний релиз и установить):
+Перед установкой нужно:
+
+1. **Xiaomi BE7000** с root/SSH (`ssh root@192.168.31.1`)
+2. **USB-накопитель**, смонтированный в `/mnt/usb-`* — panel и Xray хранятся на флешке
+3. **Гостевая Wi‑Fi** включена; известна подсеть гостей (часто `192.168.33.0/24`)
+4. **Подписка VPN** или ссылка `vless://…`
+5. **Интернет на роутере** — для скачивания Xray и обновления подписок
+
+Подробный чеклист: [docs/prerequisites.md](docs/prerequisites.md)
+
+---
+
+
+
+## Быстрый старт
+
+
+
+### Установка из Release (роутер)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/TAIIOK/xi-ray/main/scripts/quick-install.sh | sh
 ```
 
-**Вариант 2 — вручную из архива:**
+После установки: **[http://192.168.31.1:7777/onboarding](http://192.168.31.1:7777/onboarding)** (`admin` / `admin`).
 
-```bash
-cd /tmp
-wget https://github.com/TAIIOK/xi-ray/releases/latest/download/xiaomi-vless-vX.Y.Z-linux-arm64.tar.gz
-tar xzf xiaomi-vless-vX.Y.Z-linux-arm64.tar.gz
-sh install.sh
-```
-
-Скрипт `install.sh` из релиза:
-- находит USB (`/mnt/usb-*`)
-- копирует panel, scripts, updater на USB
-- создаёт `panel.json` (если ещё нет)
-- регистрирует autostart (procd, cron, startup_user.sh)
-- **сразу запускает panel**
-
-После установки откройте **http://192.168.31.1:7777/onboarding** (`admin` / `admin`).
-
-### Установка из исходников (разработчик)
+### Установка из исходников
 
 ```bash
 make build-arm64
 ssh root@192.168.31.1 'sh -s' < deploy/install.sh
 ```
 
-Или из репозитория на роутере:
 
-```bash
-make install
-```
 
-`deploy/install.sh` после копирования файлов:
-- регистрирует autostart (procd, cron, `startup_user.sh`)
-- **сразу запускает panel** (procd с respawn, иначе nohup)
-- **запускает Xray**, если уже настроен (`xray.env`), иначе ждёт onboarding
-- проверяет, что панель отвечает на `:7777`
+### Первичная настройка (onboarding)
 
-Панель: **http://192.168.31.1:7777**
+1. Сменить пароль по умолчанию
+2. Выбрать USB, при необходимости скачать Xray
+3. Импортировать подписку, выбрать сервер(ы)
+4. **Завершить настройку** (Apply + restart Xray)
 
-Логин по умолчанию: `admin` / `admin` (смените в настройках).
+Подробнее: [docs/installation.md](docs/installation.md), [docs/usage.md](docs/usage.md)
 
-## Деинсталляция
+---
 
-Скрипт [`deploy/uninstall.sh`](deploy/uninstall.sh) полностью удаляет panel, автозапуск, iptables-правила и данные на USB. Без `--yes` — только просмотр (dry-run).
 
-```bash
-# Посмотреть, что будет удалено
-sh deploy/uninstall.sh
 
-# Полная очистка (роутер + USB xiaomi-vless + xray)
-sh deploy/uninstall.sh --yes
+## Ошибка загрузки роутера с USB-флешкой
 
-# Только роутер (USB оставить)
-sh deploy/uninstall.sh --yes --router-only
+На BE7000 при **холодной загрузке с уже вставленной флешкой** роутер иногда **не поднимает интернет** на основной Wi‑Fi (долгая загрузка, нет WAN/NAT). Без флешки всё работает нормально.
 
-# USB: panel, но Xray оставить
-sh deploy/uninstall.sh --yes --keep-xray
-```
+**Как исправить:**
 
-С роутера через SSH:
+1. Перезагрузите роутер **без USB-флешки**
+2. Дождитесь полной загрузки и рабочего интернета
+3. **Вставьте флешку** — hotplug запустит panel и Xray автоматически
 
-```bash
-ssh root@192.168.31.1 'sh -s' < deploy/uninstall.sh -- --yes
-```
+Для постоянной эксплуатации удобнее **всегда загружать роутер без флешки**, затем подключать USB вручную.
 
-Из релизного архива (рядом с `install.sh`):
+> Не используйте `uci firewall` include для VPN-скриптов — это блокирует поднятие WAN при boot. Текущий установщик такой hook не создаёт и удаляет старый, если был.
 
-```bash
-sh uninstall.sh --yes
-```
+Подробнее: [docs/troubleshooting.md](docs/troubleshooting.md)
 
-Что удаляется с роутера: `/data/xiaomi-vless-boot.sh`, hotplug, хуки в `/data/startup_user.sh`, cron, `uci firewall`, init.d-сервисы (`xiaomi-vless-boot`, panel, xray), `/etc/sysctl.d/99-xray-guest.conf`, iptables-цепочки `XRAY_GUEST_*`. Что удаляется с USB: каталоги `xiaomi-vless/` и `xray/` (если не указан `--keep-xray`). После деинсталляции рекомендуется перезагрузка для сброса sysctl.
+---
 
-## Автозапуск VPN после перезагрузки
 
-`deploy/install.sh` регистрирует автозапуск Xray + iptables несколькими способами:
 
-| Механизм | Назначение |
-|----------|------------|
-| `/data/xiaomi-vless-boot.sh` | ждёт USB (до 3 мин), затем panel + xray |
-| `/etc/hotplug.d/block/99-xiaomi-vless` | старт при подключении USB (boot с флешкой) |
-| `/etc/init.d/xiaomi-vless-boot` | procd START=99, резервный запуск |
-| `/data/startup_user.sh` | hook Xiaomi (может не вызываться на всех прошивках) |
-| `cron @reboot sleep 30` | резервный запуск через 30 сек |
-| `cron * * * * *` | watchdog: поднять panel если упал |
-| `cron */2` | пере-применение iptables каждые 2 мин |
+## Автозапуск после reboot
 
-> **Не используйте `uci firewall` include** для VPN-скриптов — firewall ждёт их синхронно, и при boot с USB роутер может не отдать интернет.
-
-После reboot panel обычно доступен через **1–3 минуты**. Лог: `tail -f /data/xiaomi-vless-boot.log`
-
-Скрипт `/data/xiaomi-vless-boot.sh` (копируется на flash при install):
-
-- ждёт mount USB с panel/xray (до 3 мин)
-- ждёт LAN
-- запускает panel на `0.0.0.0:7777`
-- запускает Xray через `startup_xray_guest.sh`
-
-Скрипт `/mnt/usb-…/xiaomi-vless/startup_xray_guest.sh`:
-- ждёт сеть
-- применяет `sysctl` (rp_filter)
-- запускает Xray
-- применяет iptables с retry
-
-Только автозапуск (без переустановки панели):
-
-```bash
-ssh root@192.168.31.1 'INSTALL_DIR=/mnt/usb-XXX/xiaomi-vless USB_MOUNT=/mnt/usb-XXX sh -s' < deploy/install-autostart.sh
-```
-
-Или одноразовый фикс на живом роутере:
-
-```bash
-ssh root@192.168.31.1 'sh -s' < deploy/fix-autostart.sh
-```
-
-Проверка после reboot:
+Panel и Xray поднимаются через `/data/xiaomi-vless-boot.sh` (ждёт USB до 3 мин). Обычно panel доступен через **1–3 минуты** после перезагрузки.
 
 ```bash
 tail -f /data/xiaomi-vless-boot.log
-tail -f /mnt/usb-*/xiaomi-vless/xray-startup.log
-pidof panel
-pidof xray
-iptables -t nat -L XRAY_GUEST_TCP -v -n | tail -3
+pidof panel xray
 ```
 
-## Конфигурация
+Подробнее: [docs/autostart.md](docs/autostart.md)
 
-Файл `/data/xiaomi-vless/panel.json`:
+---
 
-| Поле | Значение по умолчанию |
-|------|----------------------|
-| xray_bin | `/mnt/usb-ed49605f/xray/bin/xray` |
-| xray_config | `/mnt/usb-ed49605f/xray/config.json` |
-| listen_addr | `192.168.31.1:7777` |
-| xray_api_addr | `127.0.0.1:10085` |
-| guest_subnet | `192.168.33.0/24` |
 
-**Apply** перегенерирует `config.json` и `/data/xray-guest-iptables.sh` под выбранные серверы.
 
-## API
-
-| Method | Path | Описание |
-|--------|------|----------|
-| GET | `/api/status` | Статус Xray и VPN |
-| GET | `/api/nodes` | Список серверов |
-| POST | `/api/subscriptions` | Добавить подписку |
-| PUT | `/api/selection` | Выбор серверов |
-| POST | `/api/apply` | Применить config + restart |
-| POST | `/api/restart` | Restart Xray |
-| GET | `/api/update/status` | Версия panel и статус обновления |
-| GET | `/api/update/check` | Проверить GitHub Releases |
-| POST | `/api/update/download` | Скачать bundle |
-| POST | `/api/update/apply` | Установить обновление |
-| POST | `/api/update/rollback` | Откат на panel.previous |
-
-## Multi-server failover
-
-1. На странице **Серверы** выберите 2+ nodes
-2. Режим **Несколько + failover**
-3. **Apply + Restart**
-
-Xray Observatory проверяет outbounds и balancer переключает на живой сервер.
-
-## Локальная разработка
+## Деинсталляция
 
 ```bash
-make build-arm64   # или go build ./cmd/panel
+sh deploy/uninstall.sh          # dry-run
+sh deploy/uninstall.sh --yes    # полная очистка
+```
+
+Флаги: `--router-only`, `--keep-xray`. См. [docs/installation.md](docs/installation.md).
+
+---
+
+
+
+## Сборка
+
+```bash
+make tidy && make test && make build-arm64
+```
+
+Локально:
+
+```bash
 PANEL_CONFIG=./deploy/panel.json.example go run ./cmd/panel -listen 0.0.0.0:7777
 ```
 
-Флаг `-listen` (или env `PANEL_LISTEN`) переопределяет `listen_addr` только на время запуска, `panel.json` не меняется:
+Подробнее: [docs/development.md](docs/development.md)
 
-```bash
-# все интерфейсы, порт из panel.json
-go run ./cmd/panel -config ./deploy/panel.json.example -listen 0.0.0.0
+---
 
-# явный host:port
-go run ./cmd/panel -listen 127.0.0.1:7777
-```
 
-Открыть: http://127.0.0.1:7777
-
-## Релизы и обновление
-
-### Публикация релиза (разработчик)
-
-```bash
-make test
-make release-bundle VERSION=v1.0.0   # локальная проверка bundle
-make tag-release VERSION=v1.0.0      # tag → GitHub Actions создаст Release
-```
-
-GitHub Actions (`.github/workflows/release.yml`) при push tag `v*.*.*`:
-- запускает тесты
-- собирает `xiaomi-vless-vX.Y.Z-linux-arm64.tar.gz` (panel + scripts + deploy + manifest.json)
-- публикует Release в [TAIIOK/xi-ray](https://github.com/TAIIOK/xi-ray)
-
-### Обновление из панели (роутер)
-
-1. **Настройки → Обновление panel → Проверить обновления**
-2. **Скачать** — загрузка с возобновлением при обрыве сети
-3. **Обновить** — атомарная установка через `panel-updater.sh`
-4. При ошибке — **Откатить** на `panel.previous`
-
-Безопасность:
-- `panel.json` не перезаписывается; перед apply создаётся backup
-- бинарник заменяется через rename (running process не ломается)
-- состояние в `updates/state.json` — boot resume после обрыва SSH/питания
-- post-update health check (`xray -test`, panel binary) с auto-rollback
-
-Версия panel: `./panel -version` или footer на Dashboard.
 
 ## Документация
 
-- [docs/chat-vless-xiaomi-be7000.md](docs/chat-vless-xiaomi-be7000.md) — история настройки роутера
+
+| Документ                                                             | Содержание                      |
+| -------------------------------------------------------------------- | ------------------------------- |
+| [docs/README.md](docs/README.md)                                     | Оглавление                      |
+| [docs/overview.md](docs/overview.md)                                 | Обзор, ограничения, архитектура |
+| [docs/prerequisites.md](docs/prerequisites.md)                       | Подготовка роутера              |
+| [docs/installation.md](docs/installation.md)                         | Установка и удаление            |
+| [docs/usage.md](docs/usage.md)                                       | Работа с панелью                |
+| [docs/autostart.md](docs/autostart.md)                               | Автозапуск                      |
+| [docs/configuration.md](docs/configuration.md)                       | panel.json и API                |
+| [docs/troubleshooting.md](docs/troubleshooting.md)                   | Устранение неполадок            |
+| [docs/development.md](docs/development.md)                           | Сборка и релизы                 |
+
+
+
+---
+
