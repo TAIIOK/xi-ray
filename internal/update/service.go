@@ -6,9 +6,9 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/taiiok/xiaomi-vless/internal/config"
@@ -37,6 +37,8 @@ type Service struct {
 	downloadClient *http.Client
 	cfg            func() config.PanelConfig
 	PostUpdateHook func(context.Context) error
+	staleResumeMu  sync.Mutex
+	lastStaleResume time.Time
 }
 
 func NewService(home, configPath string, cfg func() config.PanelConfig) *Service {
@@ -59,6 +61,7 @@ func (s *Service) Status(ctx context.Context) (StatusResponse, error) {
 	if err != nil {
 		return StatusResponse{}, err
 	}
+	s.resumeStaleUpdateIfNeeded(st)
 	if st.Phase == PhaseChecking {
 		st.Phase = PhaseIdle
 		_ = s.store.Save(st)
@@ -69,23 +72,25 @@ func (s *Service) Status(ctx context.Context) (StatusResponse, error) {
 		Phase:          st.Phase,
 		TargetVersion:  st.TargetVersion,
 		Error:          st.Error,
-		CanRollback:    s.layout.HasPrevious() && s.layout.UpdaterReady(),
 		CanApply:       st.Phase == PhaseVerified,
 		CanDownload:    st.Phase == PhaseIdle || st.Phase == PhaseFailed || st.Phase == PhaseRolledBack || st.Phase == PhaseDownloading,
 	}
 	if st.TotalBytes > 0 {
 		resp.Progress = float64(st.DownloadedBytes) / float64(st.TotalBytes) * 100
 	}
-	if s.layout.HasPrevious() {
+	if s.layout.HasPrevious() && s.layout.UpdaterReady() {
 		if v := s.layout.PreviousPanelVersion(); v != "" {
 			resp.RollbackVersion = v
 			resp.PreviousVersion = v
+			resp.CanRollback = !SameVersionLabel(v, version.Version)
 		} else if st.PreviousVersion != "" {
 			resp.PreviousVersion = st.PreviousVersion
 			resp.RollbackVersion = st.PreviousVersion
+			resp.CanRollback = !SameVersionLabel(st.PreviousVersion, version.Version)
 		} else {
 			resp.PreviousVersion = "previous"
 			resp.RollbackVersion = "previous"
+			resp.CanRollback = true
 		}
 	} else if st.PreviousVersion != "" {
 		resp.PreviousVersion = st.PreviousVersion
@@ -266,9 +271,7 @@ func (s *Service) Apply(ctx context.Context) (StatusResponse, error) {
 		return StatusResponse{}, err
 	}
 
-	cmd := exec.CommandContext(ctx, "nohup", s.layout.UpdaterScript, "apply")
-	cmd.Dir = s.layout.Home
-	if err := cmd.Start(); err != nil {
+	if err := s.spawnUpdaterScript("apply"); err != nil {
 		_ = s.store.Fail(st, PhaseFailed, err)
 		return s.Status(ctx)
 	}
@@ -293,9 +296,7 @@ func (s *Service) Rollback(ctx context.Context) (StatusResponse, error) {
 	if err := s.store.Save(st); err != nil {
 		return StatusResponse{}, err
 	}
-	cmd := exec.Command("nohup", s.layout.UpdaterScript, "rollback")
-	cmd.Dir = s.layout.Home
-	if err := cmd.Start(); err != nil {
+	if err := s.spawnUpdaterScript("rollback"); err != nil {
 		_ = s.store.Fail(st, PhaseFailed, err)
 		return s.Status(ctx)
 	}
@@ -341,10 +342,12 @@ func (s *Service) ResumeOrVerify(ctx context.Context) error {
 		_, err := s.Download(ctx, st.TargetVersion)
 		return err
 	case PhaseExtracting, PhaseVerified, PhaseApplying, PhaseRestarting:
-		if _, err := os.Stat(s.layout.UpdaterScript); err == nil {
-			cmd := exec.CommandContext(ctx, s.layout.UpdaterScript, "resume")
-			cmd.Dir = s.layout.Home
-			_ = cmd.Run()
+		if s.layout.UpdaterReady() {
+			go func() {
+				if err := s.spawnUpdaterScript("resume"); err != nil {
+					log.Printf("update resume spawn: %v", err)
+				}
+			}()
 		}
 		return nil
 	case PhaseHealthCheck:
@@ -389,10 +392,8 @@ func (s *Service) runHealthCheck(ctx context.Context) error {
 	}
 
 	_ = s.store.Fail(st, PhaseHealthCheck, fmt.Errorf("%s", result.Message))
-	if _, err := os.Stat(s.layout.UpdaterScript); err == nil {
-		cmd := exec.CommandContext(context.Background(), s.layout.UpdaterScript, "rollback")
-		cmd.Dir = s.layout.Home
-		_ = cmd.Run()
+	if s.layout.UpdaterReady() {
+		_ = s.spawnUpdaterScript("rollback")
 	}
 	return fmt.Errorf("health check failed: %s", result.Message)
 }

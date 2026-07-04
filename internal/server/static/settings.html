@@ -469,7 +469,7 @@
         const ver = st.rollback_version || st.previous_version;
         rollbackEl.textContent = ver === 'previous' ? t('settings.rollback_unknown_version') : ver;
         rollbackHint.hidden = true;
-      } else if (st.rollback_version || (st.previous_version && st.previous_version !== 'previous')) {
+      } else if ((st.rollback_version || st.previous_version) && (st.rollback_version || st.previous_version) !== 'previous') {
         rollbackEl.textContent = st.rollback_version || st.previous_version;
         rollbackHint.hidden = false;
       } else {
@@ -542,9 +542,9 @@
       if (!confirm('Установить обновление? Панель перезапустится.')) return;
       const btn = document.getElementById('btn-upd-apply');
       try {
-        await withButtonBusy(btn, 'Установка…', () => API.send('POST', '/api/update/apply', {}));
-        showMsg(document.getElementById('msg'), 'Обновление запущено — страница перезагрузится', true);
-        setTimeout(() => location.reload(), 5000);
+        const st = await withButtonBusy(btn, t('update.applying'), () => API.send('POST', '/api/update/apply', {}));
+        renderUpdate(st);
+        showMsg(document.getElementById('msg'), t('update.applying'), true);
       } catch (err) { showMsg(document.getElementById('msg'), err.message); }
     };
 

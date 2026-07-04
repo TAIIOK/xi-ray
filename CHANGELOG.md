@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-07-04
+
+### Fixed
+
+- Panel apply no longer stuck on «Установка…»: stale `applying` phase auto-resumes after 90s
+- Updater runs detached with output to `panel-update.log`; startup resume no longer blocks or deadlocks on flock
+- Settings apply flow uses polling instead of page reload during install
+- Rollback version shown with `v` prefix; rollback button hidden when `panel.previous` matches current version
+
 ## [0.3.2] - 2026-07-04
 
 ### Added
@@ -60,6 +69,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Embedded version via `-version` flag
 - Release `install.sh` and `scripts/quick-install.sh` for one-command setup
 
+[0.3.3]: https://github.com/TAIIOK/xi-ray/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/TAIIOK/xi-ray/compare/v0.3.0...v0.3.2
 [0.3.0]: https://github.com/TAIIOK/xi-ray/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/TAIIOK/xi-ray/releases/tag/v0.2.0

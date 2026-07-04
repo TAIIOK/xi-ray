@@ -214,6 +214,10 @@ STAGING="$HOME/updates/staging"
 STARTUP_SCRIPT="$HOME/startup_xray_guest.sh"
 CRON_FILE="/etc/crontabs/root"
 
+# All updater output goes to panel-update.log (survives nohup / service restart).
+exec >>"$HOME/panel-update.log" 2>&1
+log "action=$ACTION pid=$$"
+
 case "$ACTION" in
   apply)
     with_lock do_apply
