@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,7 +26,7 @@ func TestFailOpenServiceMarker(t *testing.T) {
 		t.Fatal("expected inactive before enable")
 	}
 
-	if err := svc.Enable(t.Context()); err != nil {
+	if err := svc.Enable(context.Background()); err != nil {
 		t.Fatalf("enable: %v", err)
 	}
 	if !svc.IsActive() {
@@ -66,7 +67,7 @@ func TestFailOpenDisabledExplicit(t *testing.T) {
 	if svc.Enabled() {
 		t.Fatal("expected fail-open disabled")
 	}
-	if err := svc.MaybeEnable(t.Context()); err != nil {
+	if err := svc.MaybeEnable(context.Background()); err != nil {
 		t.Fatalf("maybe enable: %v", err)
 	}
 	if _, err := os.Stat(store.Get().FailOpen.MarkerPathOrDefault()); !os.IsNotExist(err) {

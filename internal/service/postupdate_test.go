@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,7 +25,7 @@ func TestRunPostUpdateWritesTeardownScript(t *testing.T) {
 	})
 
 	panel := NewPanelService(store)
-	if err := panel.RunPostUpdate(t.Context()); err != nil {
+	if err := panel.RunPostUpdate(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
