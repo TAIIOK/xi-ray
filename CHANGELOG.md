@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-07-06
+
+### Added
+
+- Integration tests for panel self-update: `scripts/test-update.sh`, `internal/server/update_handlers_test.go`, `internal/update/service_integration_test.go`
+- Lab E2E update test: `make lab-update-test` (panel-updater apply on Multipass VM without GitHub)
+
+### Fixed
+
+- Panel self-update on systemd/lab no longer installs OpenWrt init.d hooks that break `xiaomi-vless-panel.service`
+- `install-autostart.sh` skips init.d and panel cron watchdog when host uses systemd; uses `INSTALL_DIR` paths on lab instead of `/data`
+- `panel-updater.sh` passes `XIAOMI_VLESS_USE_SYSTEMD` and removes legacy init.d after update hooks
+- Lab provision removes incompatible init.d before `systemctl enable`
+- Update resume retries `extracting` phase if archive is present; `CanDownload` disabled during active download
+- Bundle `manifest.platform` validated before apply (prevents wrong-arch installs on Intel lab)
+
 ## [0.3.3] - 2026-07-04
 
 ### Fixed
@@ -69,6 +85,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Embedded version via `-version` flag
 - Release `install.sh` and `scripts/quick-install.sh` for one-command setup
 
+[0.3.5]: https://github.com/TAIIOK/xi-ray/compare/v0.3.3...v0.3.5
 [0.3.3]: https://github.com/TAIIOK/xi-ray/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/TAIIOK/xi-ray/compare/v0.3.0...v0.3.2
 [0.3.0]: https://github.com/TAIIOK/xi-ray/compare/v0.2.0...v0.3.0

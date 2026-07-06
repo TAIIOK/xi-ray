@@ -8,6 +8,10 @@ LOCK_FILE="/tmp/xiaomi-vless-update.lock"
 log() { echo "[panel-updater] $*"; }
 
 find_home() {
+  if [ -n "${PANEL_UPDATE_TEST_HOME:-}" ] && [ -d "$PANEL_UPDATE_TEST_HOME" ]; then
+    echo "$PANEL_UPDATE_TEST_HOME"
+    return 0
+  fi
   for d in /mnt/usb-*/xiaomi-vless; do
     if [ -d "$d" ]; then
       echo "$d"
@@ -115,6 +119,15 @@ restart_xray() {
   fi
 }
 
+remove_legacy_initd() {
+  for legacy in xiaomi-vless-panel xiaomi-vless-xray xiaomi-vless-boot; do
+    if [ -f "/etc/init.d/$legacy" ]; then
+      rm -f "/etc/init.d/$legacy"
+      log "removed incompatible init.d/$legacy (host uses systemd)"
+    fi
+  done
+}
+
 install_flash_hooks() {
   deploy_dir="$STAGING/deploy"
   [ -d "$deploy_dir" ] || return 0
@@ -123,23 +136,48 @@ install_flash_hooks() {
     cp -a "$CRON_FILE" "${CRON_FILE}.bak.$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
   fi
 
+  use_systemd_panel=0
+  if command -v systemctl >/dev/null 2>&1 && systemctl cat xiaomi-vless-panel.service >/dev/null 2>&1; then
+    use_systemd_panel=1
+  fi
+
   if [ -f "$deploy_dir/xiaomi-vless-panel.init" ] && [ -d /etc/init.d ]; then
-    cp "$deploy_dir/xiaomi-vless-panel.init" /etc/init.d/xiaomi-vless-panel
-    chmod +x /etc/init.d/xiaomi-vless-panel
-    /etc/init.d/xiaomi-vless-panel enable 2>/dev/null || true
-    log "panel init.d updated"
+    if [ "$use_systemd_panel" = "1" ]; then
+      rm -f /etc/init.d/xiaomi-vless-panel 2>/dev/null || true
+      log "skip panel init.d — host uses systemd (xiaomi-vless-panel.service)"
+    else
+      cp "$deploy_dir/xiaomi-vless-panel.init" /etc/init.d/xiaomi-vless-panel
+      chmod +x /etc/init.d/xiaomi-vless-panel
+      /etc/init.d/xiaomi-vless-panel enable 2>/dev/null || true
+      log "panel init.d updated"
+    fi
   fi
 
   if [ -f "$deploy_dir/install-autostart.sh" ]; then
-    INSTALL_DIR="$HOME" USB_MOUNT="$(dirname "$HOME")" \
-      INIT_SRC="$deploy_dir/xiaomi-vless-xray.init" \
-      sh "$deploy_dir/install-autostart.sh"
+    autostart_env="INSTALL_DIR=$HOME USB_MOUNT=$(dirname "$HOME") INIT_SRC=$deploy_dir/xiaomi-vless-xray.init"
+    if [ "$use_systemd_panel" = "1" ]; then
+      autostart_env="$autostart_env XIAOMI_VLESS_USE_SYSTEMD=1"
+      autostart_env="$autostart_env BOOT_SCRIPT=$HOME/boot-xiaomi-vless.sh"
+      autostart_env="$autostart_env GUARD_SCRIPT=$HOME/xiaomi-vless-failopen-guard.sh"
+      autostart_env="$autostart_env USER_STARTUP=$HOME/startup_user.sh"
+      autostart_env="$autostart_env CRON_FILE=$HOME/crontab.root"
+    fi
+    # shellcheck disable=SC2086
+    env $autostart_env sh "$deploy_dir/install-autostart.sh"
+    if [ "$use_systemd_panel" = "1" ]; then
+      remove_legacy_initd
+    fi
     log "guest autostart refreshed"
   elif [ -f "$deploy_dir/xiaomi-vless-xray.init" ] && [ -d /etc/init.d ]; then
-    cp "$deploy_dir/xiaomi-vless-xray.init" /etc/init.d/xiaomi-vless-xray
-    chmod +x /etc/init.d/xiaomi-vless-xray
-    /etc/init.d/xiaomi-vless-xray enable 2>/dev/null || true
-    log "xray init.d updated"
+    if [ "$use_systemd_panel" = "1" ]; then
+      rm -f /etc/init.d/xiaomi-vless-xray 2>/dev/null || true
+      log "skip xray init.d — host uses systemd"
+    else
+      cp "$deploy_dir/xiaomi-vless-xray.init" /etc/init.d/xiaomi-vless-xray
+      chmod +x /etc/init.d/xiaomi-vless-xray
+      /etc/init.d/xiaomi-vless-xray enable 2>/dev/null || true
+      log "xray init.d updated"
+    fi
   fi
 }
 

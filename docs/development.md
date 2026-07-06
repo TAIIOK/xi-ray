@@ -83,7 +83,8 @@ GitHub Actions (`.github/workflows/release.yml`) при push tag `v*.*.*`:
 ## Тест обновления локально
 
 ```bash
-scripts/test-update.sh
+scripts/test-update.sh      # CLI + panel-updater hooks (без VM)
+make lab-update-test        # E2E на lab VM через panel-updater.sh
 ```
 
 ## Lab VM (Multipass)

@@ -6,10 +6,10 @@ set -eu
 INSTALL_DIR="${INSTALL_DIR:-${USB_MOUNT:-/mnt/usb-ed49605f}/xiaomi-vless}"
 IPTABLES_SCRIPT="${INSTALL_DIR}/xray-guest-iptables.sh"
 IPTABLES_CRON="${INSTALL_DIR}/xray-guest-iptables-cron.sh"
-GUARD_SCRIPT="/data/xiaomi-vless-failopen-guard.sh"
-USER_STARTUP="/data/startup_user.sh"
-CRON_FILE="/etc/crontabs/root"
-BOOT_SCRIPT="/data/xiaomi-vless-boot.sh"
+GUARD_SCRIPT="${GUARD_SCRIPT:-/data/xiaomi-vless-failopen-guard.sh}"
+USER_STARTUP="${USER_STARTUP:-/data/startup_user.sh}"
+CRON_FILE="${CRON_FILE:-/etc/crontabs/root}"
+BOOT_SCRIPT="${BOOT_SCRIPT:-/data/xiaomi-vless-boot.sh}"
 BOOT_SRC="${BOOT_SRC:-}"
 
 MARKER_BOOT="# xiaomi-vless-boot"
@@ -19,6 +19,25 @@ MARKER_PANEL="# xiaomi-vless-panel"
 MARKER_UPDATE="# xiaomi-vless-update-resume"
 
 log() { echo "[autostart] $*"; }
+
+detect_use_systemd_panel() {
+  if [ "${XIAOMI_VLESS_USE_SYSTEMD:-}" = "1" ]; then
+    return 0
+  fi
+  if command -v systemctl >/dev/null 2>&1 && systemctl cat xiaomi-vless-panel.service >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
+remove_legacy_initd() {
+  for legacy in xiaomi-vless-panel xiaomi-vless-xray xiaomi-vless-boot; do
+    if [ -f "/etc/init.d/$legacy" ]; then
+      rm -f "/etc/init.d/$legacy"
+      log "removed incompatible init.d/$legacy (host uses systemd)"
+    fi
+  done
+}
 
 resolve_boot_src() {
   if [ -n "$BOOT_SRC" ] && [ -f "$BOOT_SRC" ]; then
@@ -40,10 +59,14 @@ resolve_boot_src() {
 
 install_boot_script() {
   src="$(resolve_boot_src)" || die "boot-xiaomi-vless.sh not found"
+  mkdir -p "$(dirname "$BOOT_SCRIPT")"
   cp -f "$src" "$BOOT_SCRIPT"
   chmod +x "$BOOT_SCRIPT"
-  cp -f "$src" "${INSTALL_DIR}/boot-xiaomi-vless.sh"
-  chmod +x "${INSTALL_DIR}/boot-xiaomi-vless.sh"
+  dest="${INSTALL_DIR}/boot-xiaomi-vless.sh"
+  if [ "$src" != "$dest" ]; then
+    cp -f "$src" "$dest"
+    chmod +x "$dest"
+  fi
   log "boot script installed: $BOOT_SCRIPT"
 }
 
@@ -54,6 +77,7 @@ install_failopen_guard() {
     "${INSTALL_DIR}/xiaomi-vless-failopen-guard.sh" \
     "${script_dir}/xiaomi-vless-failopen-guard.sh"; do
     if [ -f "$candidate" ]; then
+      mkdir -p "$(dirname "$GUARD_SCRIPT")"
       cp -f "$candidate" "$GUARD_SCRIPT"
       chmod +x "$GUARD_SCRIPT"
       cp -f "$candidate" "${INSTALL_DIR}/xiaomi-vless-failopen-guard.sh"
@@ -109,6 +133,7 @@ cleanup_legacy_hooks() {
 }
 
 install_user_startup() {
+  mkdir -p "$(dirname "$USER_STARTUP")"
   if [ ! -f "$USER_STARTUP" ]; then
     printf '%s\n' '#!/bin/sh' > "$USER_STARTUP"
     chmod +x "$USER_STARTUP"
@@ -156,6 +181,10 @@ install_hotplug() {
 }
 
 install_boot_init() {
+  if detect_use_systemd_panel; then
+    log "skip boot init.d — host uses systemd (xiaomi-vless-panel.service)"
+    return 0
+  fi
   init_src="${SCRIPT_DIR}/xiaomi-vless-boot.init"
   if [ ! -f "$init_src" ] || [ ! -d /etc/init.d ]; then
     return 0
@@ -169,6 +198,10 @@ install_boot_init() {
 }
 
 install_procd_init() {
+  if detect_use_systemd_panel; then
+    log "skip xray init.d — host uses systemd"
+    return 0
+  fi
   init_src="$1"
   if [ ! -f "$init_src" ] || [ ! -d /etc/init.d ]; then
     return 0
@@ -198,9 +231,15 @@ install_cron() {
   {
     echo "$MARKER_BOOT"
     echo "@reboot sleep 30 && ${BOOT_SCRIPT} >/dev/null 2>&1"
-    echo "* * * * * pidof panel >/dev/null 2>&1 || ${BOOT_SCRIPT} >/dev/null 2>&1"
+    if ! detect_use_systemd_panel; then
+      echo "* * * * * pidof panel >/dev/null 2>&1 || ${BOOT_SCRIPT} >/dev/null 2>&1"
+    fi
   } >> "$CRON_FILE"
-  log "cron boot + panel watchdog added"
+  if detect_use_systemd_panel; then
+    log "cron boot added (panel watchdog skipped — systemd manages panel)"
+  else
+    log "cron boot + panel watchdog added"
+  fi
 
   if [ -x "$GUARD_SCRIPT" ] && ! grep -q 'xiaomi-vless-failopen-guard.sh' "$CRON_FILE" 2>/dev/null; then
     echo "* * * * * ${GUARD_SCRIPT} >/dev/null 2>&1 # ${MARKER_FAILOPEN}" >> "$CRON_FILE"
@@ -240,6 +279,10 @@ install_hotplug
 install_boot_init
 install_procd_init "$INIT_SRC"
 install_cron
+
+if detect_use_systemd_panel; then
+  remove_legacy_initd
+fi
 
 log "Autostart configured (USB: ${INSTALL_DIR})"
 log "Boot log: tail -f /data/xiaomi-vless-boot.log"

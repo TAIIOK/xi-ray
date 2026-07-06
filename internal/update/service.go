@@ -52,6 +52,16 @@ func NewService(home, configPath string, cfg func() config.PanelConfig) *Service
 	}
 }
 
+// SetHTTPClients overrides HTTP clients (used by integration tests).
+func (s *Service) SetHTTPClients(check, download *http.Client) {
+	if check != nil {
+		s.checkClient = check
+	}
+	if download != nil {
+		s.downloadClient = download
+	}
+}
+
 func (s *Service) Layout() Layout { return s.layout }
 
 func (s *Service) Status(ctx context.Context) (StatusResponse, error) {
@@ -73,7 +83,7 @@ func (s *Service) Status(ctx context.Context) (StatusResponse, error) {
 		TargetVersion:  st.TargetVersion,
 		Error:          st.Error,
 		CanApply:       st.Phase == PhaseVerified,
-		CanDownload:    st.Phase == PhaseIdle || st.Phase == PhaseFailed || st.Phase == PhaseRolledBack || st.Phase == PhaseDownloading,
+		CanDownload:    st.Phase == PhaseIdle || st.Phase == PhaseFailed || st.Phase == PhaseRolledBack,
 	}
 	if st.TotalBytes > 0 {
 		resp.Progress = float64(st.DownloadedBytes) / float64(st.TotalBytes) * 100
@@ -259,6 +269,13 @@ func (s *Service) Apply(ctx context.Context) (StatusResponse, error) {
 	if st.Phase != PhaseVerified {
 		return StatusResponse{}, fmt.Errorf("cannot apply in phase %s", st.Phase)
 	}
+	manifest, err := LoadManifest(filepath.Join(s.layout.StagingDir, "manifest.json"))
+	if err != nil {
+		return StatusResponse{}, fmt.Errorf("staging manifest: %w", err)
+	}
+	if err := manifest.ValidatePlatform(); err != nil {
+		return StatusResponse{}, err
+	}
 	if err := s.layout.EnsureUpdaterScript(); err != nil {
 		return StatusResponse{}, fmt.Errorf("install updater script: %w", err)
 	}
@@ -341,7 +358,9 @@ func (s *Service) ResumeOrVerify(ctx context.Context) error {
 	case PhaseDownloading:
 		_, err := s.Download(ctx, st.TargetVersion)
 		return err
-	case PhaseExtracting, PhaseVerified, PhaseApplying, PhaseRestarting:
+	case PhaseExtracting:
+		return s.resumeExtracting(ctx)
+	case PhaseVerified, PhaseApplying, PhaseRestarting:
 		if s.layout.UpdaterReady() {
 			go func() {
 				if err := s.spawnUpdaterScript("resume"); err != nil {
@@ -417,4 +436,46 @@ func (s *Service) runPostUpdateAndHealthCheck() {
 	time.Sleep(2 * time.Second)
 	s.runPostUpdate(context.Background())
 	_ = s.runHealthCheck(context.Background())
+}
+
+func (s *Service) resumeExtracting(ctx context.Context) error {
+	st, err := s.store.Load()
+	if err != nil {
+		return err
+	}
+	if st.ArchivePath == "" {
+		_ = s.store.Fail(st, PhaseFailed, fmt.Errorf("extract resume: archive path missing"))
+		return fmt.Errorf("extract resume: archive path missing")
+	}
+	if _, err := os.Stat(st.ArchivePath); err != nil {
+		_ = s.store.Fail(st, PhaseFailed, fmt.Errorf("extract resume: archive missing: %w", err))
+		return err
+	}
+
+	if err := ExtractArchive(st.ArchivePath, s.layout.StagingDir); err != nil {
+		_ = s.store.Fail(st, PhaseFailed, err)
+		return err
+	}
+
+	manifest, err := LoadManifest(filepath.Join(s.layout.StagingDir, "manifest.json"))
+	if err != nil {
+		_ = s.store.Fail(st, PhaseFailed, err)
+		return err
+	}
+	if err := manifest.ValidateStaging(s.layout.StagingDir); err != nil {
+		_ = s.store.Fail(st, PhaseFailed, err)
+		return err
+	}
+	if manifest.MinConfigVersion > config.CurrentVersion {
+		err := fmt.Errorf("update requires config version %d (current schema %d)", manifest.MinConfigVersion, config.CurrentVersion)
+		_ = s.store.Fail(st, PhaseFailed, err)
+		return err
+	}
+
+	st.TargetVersion = manifest.Version
+	st.Phase = PhaseVerified
+	if asset, ok := manifest.Assets["panel"]; ok {
+		st.Checksum = asset.SHA256
+	}
+	return s.store.Save(st)
 }

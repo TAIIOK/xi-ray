@@ -208,6 +208,15 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
+
+# OpenWrt init.d from in-panel update breaks systemd enable on Ubuntu lab.
+for legacy in xiaomi-vless-panel xiaomi-vless-xray; do
+  if [ -f "/etc/init.d/$legacy" ]; then
+    rm -f "/etc/init.d/$legacy"
+    log "removed incompatible init.d/$legacy (lab uses systemd)"
+  fi
+done
+
 systemctl enable xiaomi-vless-network.service xiaomi-vless-panel.service
 systemctl restart xiaomi-vless-network.service
 if start_panel_service; then

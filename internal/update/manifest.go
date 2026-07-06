@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 )
 
 type ManifestAsset struct {
@@ -48,6 +50,24 @@ func (m Manifest) ValidateStaging(stagingDir string) error {
 		if err := verifyFileSHA256(path, asset.SHA256); err != nil {
 			return fmt.Errorf("%s: %w", rel, err)
 		}
+	}
+	return nil
+}
+
+func (m Manifest) ValidatePlatform() error {
+	platform := strings.TrimSpace(m.Platform)
+	if platform == "" {
+		return nil
+	}
+	wantOS, wantArch, ok := strings.Cut(platform, "/")
+	if !ok {
+		return fmt.Errorf("invalid bundle platform %q", platform)
+	}
+	if wantOS != runtime.GOOS {
+		return fmt.Errorf("bundle platform %q does not match host OS %s", platform, runtime.GOOS)
+	}
+	if wantArch != runtime.GOARCH {
+		return fmt.Errorf("bundle platform %q does not match host arch %s", platform, runtime.GOARCH)
 	}
 	return nil
 }

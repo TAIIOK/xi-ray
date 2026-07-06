@@ -41,6 +41,7 @@ make lab-up
 | `make lab-guest-test` | Guest netns и проверка связности |
 | `make lab-deploy` | Собрать и заменить только panel (VM не трогаем) |
 | `make lab-deploy-full` | Полный redeploy: panel + скрипты + systemd + **чистый** `panel.json` (без серверов, onboarding заново) |
+| `make lab-update-test` | E2E self-update: panel-updater apply на lab VM (без GitHub) |
 | `make lab-reset-password` | Сбросить только пароль на `admin` / `admin` |
 
 **Сохранить настройки** при full deploy: `./lab/scripts/lab-deploy.sh --full --keep-config`
@@ -74,6 +75,7 @@ make lab-up              # один раз
 # правки в коде…
 make lab-deploy          # после каждой сборки
 make lab-guest-test      # проверка guest netns (создаёт namespace)
+make lab-update-test     # E2E self-update через panel-updater.sh
 ```
 
 ## Имитация гостевого устройства

@@ -1,5 +1,5 @@
 .PHONY: build build-arm64 test tidy run install uninstall uninstall-yes install-autostart release-bundle tag-release deploy \
-	lab-up lab-down lab-purge lab-shell lab-status lab-guest-test lab-routing-test lab-routing-e2e-test lab-reset-password lab-deploy lab-deploy-full
+	lab-up lab-down lab-purge lab-shell lab-status lab-guest-test lab-routing-test lab-routing-e2e-test lab-reset-password lab-deploy lab-deploy-full lab-update-test
 
 export GOTOOLCHAIN ?= go1.22.10
 
@@ -83,3 +83,6 @@ lab-deploy:
 
 lab-deploy-full:
 	sh lab/scripts/lab-deploy.sh --full
+
+lab-update-test:
+	sh lab/scripts/lab-update-test.sh
