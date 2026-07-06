@@ -13,6 +13,11 @@ func (l Layout) EnsureUpdaterScript() error {
 	if len(embeddedUpdaterScript) == 0 {
 		return nil
 	}
+	if os.Getenv("XIAOMI_VLESS_KEEP_UPDATER_SCRIPT") == "1" {
+		if _, err := os.Stat(l.UpdaterScript); err == nil {
+			return nil
+		}
+	}
 	if data, err := os.ReadFile(l.UpdaterScript); err == nil && bytes.Equal(data, embeddedUpdaterScript) {
 		return nil
 	}

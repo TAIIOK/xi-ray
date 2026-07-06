@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/taiiok/xiaomi-vless/internal/config"
 	"github.com/taiiok/xiaomi-vless/internal/service"
@@ -141,7 +142,15 @@ func TestAPIUpdateCheckDownloadFlow(t *testing.T) {
 }
 
 func TestAPIUpdateApplySetsApplyingPhase(t *testing.T) {
+	t.Setenv("XIAOMI_VLESS_KEEP_UPDATER_SCRIPT", "1")
+
 	dir := t.TempDir()
+	t.Cleanup(func() {
+		// Detached nohup updater may still be closing panel-update.log.
+		time.Sleep(200 * time.Millisecond)
+		_ = os.Remove(filepath.Join(dir, "panel-update.log"))
+	})
+
 	path := filepath.Join(dir, "panel.json")
 	if err := os.WriteFile(path, []byte(`{"paths":{}}`), 0o644); err != nil {
 		t.Fatal(err)
@@ -189,7 +198,7 @@ func TestAPIUpdateApplySetsApplyingPhase(t *testing.T) {
 	if err := update.NewStateStore(storePath).Save(update.State{Phase: update.PhaseVerified, TargetVersion: "9.9.9"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(layout.UpdaterScript, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+	if err := os.WriteFile(layout.UpdaterScript, []byte("#!/bin/sh\n# test stub\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
