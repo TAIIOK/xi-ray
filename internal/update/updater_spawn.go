@@ -10,10 +10,17 @@ import (
 const staleUpdateResumeAfter = 90 * time.Second
 
 // spawnUpdaterScript runs panel-updater.sh detached; output goes to panel-update.log.
+// On systemd hosts the script is started in a transient scope so cgroup stop during
+// panel restart does not kill the updater mid-apply.
 func (s *Service) spawnUpdaterScript(action string) error {
 	script := s.layout.UpdaterScript
 	logPath := filepath.Join(s.layout.Home, "panel-update.log")
 	shellCmd := fmt.Sprintf("%q %q >> %q 2>&1", script, action, logPath)
+	if _, err := exec.LookPath("systemd-run"); err == nil {
+		cmd := exec.Command("systemd-run", "--scope", "--collect", "sh", "-c", shellCmd)
+		cmd.Dir = s.layout.Home
+		return cmd.Start()
+	}
 	cmd := exec.Command("nohup", "sh", "-c", shellCmd)
 	cmd.Dir = s.layout.Home
 	return cmd.Start()

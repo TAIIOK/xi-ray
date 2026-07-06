@@ -70,35 +70,52 @@ panel_listen_args() {
   printf '%s' "-listen 0.0.0.0"
 }
 
+uses_systemd_panel() {
+  command -v systemctl >/dev/null 2>&1 && systemctl cat xiaomi-vless-panel.service >/dev/null 2>&1
+}
+
+wait_panel_http() {
+  i=0
+  while [ "$i" -lt 30 ]; do
+    if command -v curl >/dev/null 2>&1; then
+      if curl -fsS --connect-timeout 2 http://127.0.0.1:7777/login >/dev/null 2>&1; then
+        return 0
+      fi
+    elif uses_systemd_panel && systemctl is-active --quiet xiaomi-vless-panel.service 2>/dev/null; then
+      return 0
+    fi
+    i=$((i + 1))
+    sleep 1
+  done
+  return 1
+}
+
+# Restart from outside the panel service cgroup (updater is often a child of panel and dies on stop).
+schedule_panel_restart() {
+  if command -v systemd-run >/dev/null 2>&1 && uses_systemd_panel; then
+    unit="xiaomi-vless-panel-restart-$$"
+    log "scheduling systemctl restart via systemd-run (unit=$unit)"
+    if systemd-run --collect --unit="$unit" /bin/systemctl restart xiaomi-vless-panel.service; then
+      return 0
+    fi
+    log "WARN: systemd-run failed — falling back to direct restart"
+  fi
+  restart_panel
+}
+
 restart_panel() {
-  if command -v systemctl >/dev/null 2>&1; then
-    if systemctl cat xiaomi-vless-panel.service >/dev/null 2>&1; then
-      systemctl stop xiaomi-vless-panel.service 2>/dev/null || true
-      sleep 1
-      if killall -0 panel 2>/dev/null; then
-        killall panel 2>/dev/null || true
-        sleep 1
-      fi
-      if ! systemctl start xiaomi-vless-panel.service 2>/dev/null; then
-        log "WARN: systemctl start xiaomi-vless-panel.service failed"
-      fi
-      i=0
-      while [ "$i" -lt 30 ]; do
-        if systemctl is-active --quiet xiaomi-vless-panel.service 2>/dev/null; then
-          if command -v curl >/dev/null 2>&1; then
-            if curl -fsS --connect-timeout 2 http://127.0.0.1:7777/login >/dev/null 2>&1; then
-              return 0
-            fi
-          else
-            return 0
-          fi
-        fi
-        i=$((i + 1))
-        sleep 1
-      done
-      log "ERROR: xiaomi-vless-panel.service did not become ready"
+  if uses_systemd_panel; then
+    log "systemctl restart xiaomi-vless-panel.service"
+    if ! systemctl restart xiaomi-vless-panel.service; then
+      log "ERROR: systemctl restart failed"
+      systemctl status xiaomi-vless-panel.service --no-pager -l 2>&1 | tail -10 || true
       return 1
     fi
+    if wait_panel_http; then
+      return 0
+    fi
+    log "WARN: panel restarted but HTTP not ready yet"
+    return 0
   fi
   if [ -x /etc/init.d/xiaomi-vless-panel ]; then
     /etc/init.d/xiaomi-vless-panel restart 2>/dev/null || /etc/init.d/xiaomi-vless-panel start 2>/dev/null || true
@@ -211,13 +228,24 @@ do_apply() {
     log "apply failed"
     exit 1
   fi
-  install_flash_hooks
-  run_post_update
-  write_phase restarting
-  if restart_panel; then
-    log "panel restarted — health check will run on startup"
+  if [ -f "$STAGING/deploy/panel-updater.sh" ]; then
+    cp "$STAGING/deploy/panel-updater.sh" "$HOME/panel-updater.sh"
+    chmod +x "$HOME/panel-updater.sh"
+    log "panel-updater.sh synced from staging"
+  fi
+  if uses_systemd_panel; then
+    write_phase restarting
+    schedule_panel_restart
+    log "binary swapped — panel will restart; post-update runs on new panel startup"
   else
-    log "WARN: panel service not ready — run: systemctl start xiaomi-vless-panel.service"
+    install_flash_hooks
+    run_post_update
+    write_phase restarting
+    if restart_panel; then
+      log "panel restarted — health check will run on startup"
+    else
+      log "WARN: panel restart failed"
+    fi
   fi
 }
 
@@ -226,8 +254,12 @@ do_rollback() {
     log "rollback failed"
     exit 1
   fi
-  restart_panel
-  restart_xray
+  if uses_systemd_panel; then
+    schedule_panel_restart
+  else
+    restart_panel
+    restart_xray
+  fi
   write_phase rolled_back
   log "rollback complete"
 }
@@ -240,11 +272,15 @@ do_resume() {
       do_apply
       ;;
     restarting)
-      if systemctl is-active --quiet xiaomi-vless-panel.service 2>/dev/null; then
+      if uses_systemd_panel && systemctl is-active --quiet xiaomi-vless-panel.service 2>/dev/null; then
         write_phase health_check
         log "panel already running — defer to startup health check"
       else
-        restart_panel || log "WARN: resume restart failed"
+        if uses_systemd_panel; then
+          schedule_panel_restart || log "WARN: resume restart failed"
+        else
+          restart_panel || log "WARN: resume restart failed"
+        fi
         write_phase health_check
       fi
       ;;

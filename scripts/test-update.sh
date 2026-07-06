@@ -81,20 +81,38 @@ chmod +x "$UPD_HOME/panel-updater.sh"
 
 FAKE_BIN="$TMP/bin"
 mkdir -p "$FAKE_BIN"
-cat >"$FAKE_BIN/systemctl" <<'EOF'
+RESTART_LOG="$TMP/systemctl-restart.log"
+: >"$RESTART_LOG"
+cat >"$FAKE_BIN/systemctl" <<EOF
 #!/bin/sh
-case "$1" in
+case "\$1" in
   cat)
-    case "$2" in
+    case "\$2" in
       xiaomi-vless-panel.service) exit 0 ;;
     esac
     exit 1
     ;;
-  stop|start|is-active) exit 0 ;;
+  restart)
+    echo "restart \$2" >>"$RESTART_LOG"
+    exit 0
+    ;;
+  is-active) exit 0 ;;
 esac
 exit 1
 EOF
 chmod +x "$FAKE_BIN/systemctl"
+cat >"$FAKE_BIN/systemd-run" <<'EOF'
+#!/bin/sh
+shift
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --collect|--scope|--unit=*) shift ;;
+    *) break ;;
+  esac
+done
+exec "$@"
+EOF
+chmod +x "$FAKE_BIN/systemd-run"
 
 PANEL_UPDATE_TEST_HOME="$UPD_HOME" \
   PATH="$FAKE_BIN:$PATH" \
@@ -102,6 +120,7 @@ PANEL_UPDATE_TEST_HOME="$UPD_HOME" \
   sh "$UPD_HOME/panel-updater.sh" apply
 
 test -f "$UPD_HOME/panel.previous"
+grep -q 'restart xiaomi-vless-panel.service' "$RESTART_LOG"
 phase="$("$UPD_HOME/panel" -config "$UPD_HOME/panel.json" -update-home "$UPD_HOME" -update-get-phase)"
 test "$phase" = "restarting"
 

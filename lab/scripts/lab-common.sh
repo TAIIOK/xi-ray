@@ -109,20 +109,15 @@ lab_deploy_panel_only() {
   multipass exec "$LAB_VM_NAME" -- sudo sh -s <<'REMOTE'
 set -eu
 INSTALL="/mnt/usb-lab/xiaomi-vless"
-if systemctl is-active --quiet xiaomi-vless-panel.service 2>/dev/null; then
-  systemctl stop xiaomi-vless-panel.service
-fi
 [ -x "$INSTALL/panel" ] && cp "$INSTALL/panel" "$INSTALL/panel.previous"
 cp /tmp/panel-linux "$INSTALL/panel.new"
 mv "$INSTALL/panel.new" "$INSTALL/panel"
 chmod 755 "$INSTALL/panel"
 cp /tmp/panel-updater.sh "$INSTALL/panel-updater.sh"
 chmod +x "$INSTALL/panel-updater.sh"
-killall panel 2>/dev/null || true
-sleep 1
-systemctl start xiaomi-vless-panel.service
+systemctl restart xiaomi-vless-panel.service
 i=0
-while [ "$i" -lt 10 ]; do
+while [ "$i" -lt 15 ]; do
   if systemctl is-active --quiet xiaomi-vless-panel.service; then
     exit 0
   fi

@@ -29,7 +29,7 @@ func TestEnsureUpdaterScript(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(data, []byte("systemctl start xiaomi-vless-panel.service")) {
+	if !bytes.Contains(data, []byte("systemctl restart xiaomi-vless-panel.service")) {
 		t.Fatal("expected embedded updater to replace stale script")
 	}
 }
