@@ -21,6 +21,20 @@ const fixtureGuestDown = `br-lan           UP             192.168.31.1/24
 br-guest         DOWN
 `
 
+const fixtureGuestUnknown = `br-lan           UP             192.168.1.1/24
+br-guest         UNKNOWN        192.168.33.1/24
+`
+
+func TestDetectGuestFromOutput_UnknownBridgeUp(t *testing.T) {
+	st := DetectGuestFromOutput(config.DefaultGuestSubnet, fixtureGuestUnknown)
+	if !st.OK {
+		t.Fatalf("expected ok for UNKNOWN bridge with IP: %+v", st)
+	}
+	if !st.IsGuest {
+		t.Fatal("expected is_guest")
+	}
+}
+
 func TestDetectGuestFromOutput_OK(t *testing.T) {
 	st := DetectGuestFromOutput(config.DefaultGuestSubnet, fixtureGuestOK)
 	if !st.OK {

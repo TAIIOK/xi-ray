@@ -79,9 +79,29 @@ fail_open() {
   log "fail-open: guest traffic on direct path"
 }
 
+LOCK_FILE="${BASE}/.xray-startup.lock"
+
+acquire_lock() {
+  if command -v flock >/dev/null 2>&1; then
+    exec 9>"$LOCK_FILE"
+    flock -n 9 || return 1
+    return 0
+  fi
+  if ! mkdir "${LOCK_FILE}.d" 2>/dev/null; then
+    return 1
+  fi
+  trap 'rmdir "${LOCK_FILE}.d" 2>/dev/null || true' EXIT INT HUP
+  return 0
+}
+
 mkdir -p "$BASE" 2>/dev/null || true
 
 log "=== startup_xray_guest.sh begin ==="
+
+if ! acquire_lock; then
+  log "another startup_xray_guest.sh is running — skip"
+  exit 0
+fi
 
 if ! wait_for_usb; then
   log "ERROR: xray binary or config not found (${XRAY} / ${CONFIG})"
@@ -102,12 +122,7 @@ if [ -n "${XRAY_LOCATION_ASSET:-}" ]; then
   export XRAY_LOCATION_ASSET
 fi
 
-if ! "$XRAY" run -c "$CONFIG" >> "$LOG" 2>&1 & then
-  log "ERROR: failed to launch xray"
-  fail_open
-  exit 1
-fi
-
+"$XRAY" run -c "$CONFIG" >> "$LOG" 2>&1 &
 sleep 3
 
 if ! pidof xray >/dev/null 2>&1; then

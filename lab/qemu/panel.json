@@ -1,0 +1,65 @@
+{
+  "version": 2,
+  "paths": {
+    "xray_bin": "/mnt/usb-lab/xray/bin/xray",
+    "xray_config": "/mnt/usb-lab/xray/config.json",
+    "startup_script": "/mnt/usb-lab/xiaomi-vless/startup_xray_guest.sh",
+    "iptables_script": "/mnt/usb-lab/xiaomi-vless/xray-guest-iptables.sh",
+    "panel_data_dir": "/mnt/usb-lab/xiaomi-vless"
+  },
+  "network": {
+    "guest_subnet": "192.168.33.0/24",
+    "listen_addr": "0.0.0.0:7777",
+    "xray_api_addr": "127.0.0.1:10085"
+  },
+  "iptables": {
+    "guest_subnet": "192.168.33.0/24",
+    "tcp_port": 12346,
+    "udp_port": 12345,
+    "socks_port": 10808,
+    "api_port": 10085
+  },
+  "auth": {
+    "username": "admin"
+  },
+  "setup": {
+    "onboarding_completed": false
+  },
+  "subscriptions": [],
+  "nodes": [],
+  "selection": {
+    "mode": "single",
+    "active_node_ids": [],
+    "fallback_order": []
+  },
+  "observatory": {
+    "enabled": true,
+    "probe_url": "https://www.google.com/generate_204",
+    "probe_interval": "30s"
+  },
+  "watchdog": {
+    "enabled": true,
+    "interval_sec": 60,
+    "refresh_subscriptions_on_outage": true
+  },
+  "subscriptions_policy": {
+    "auto_refresh_enabled": true,
+    "auto_refresh_interval_min": 60,
+    "reselect_strategy": "best_ping",
+    "auto_apply_on_change": true
+  },
+  "logs": {
+    "xray_access_log": "/mnt/usb-lab/xiaomi-vless/xray-access.log",
+    "xray_error_log": "/mnt/usb-lab/xiaomi-vless/xray-error.log",
+    "startup_log": "/mnt/usb-lab/xiaomi-vless/xray-startup.log",
+    "panel_log": "/mnt/usb-lab/xiaomi-vless/panel.log"
+  },
+  "routing": {
+    "domain_strategy": "IPIfNonMatch",
+    "rule_order": ["direct", "proxy", "block"],
+    "default_guest_action": "proxy",
+    "bypass_private": true,
+    "bypass_vpn_hosts": true,
+    "rules": []
+  }
+}

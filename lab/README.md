@@ -110,3 +110,15 @@ sudo iptables -t nat -L XRAY_GUEST_TCP -v -n
 - Специфичные для BE7000 имена интерфейсов, кроме `br-guest` / `eth0`
 
 Для логики panel, конфига Xray, iptables и onboarding lab-среды достаточно.
+
+## QEMU OpenWrt (ближе к роутеру)
+
+Для тестов **procd autostart**, **cron**, **panel-updater** как на BE7000:
+
+```bash
+make qemu-up          # OpenWrt 24.10 в QEMU
+make qemu-status
+make qemu-guest-test
+```
+
+Подробнее: [qemu/README.md](qemu/README.md).

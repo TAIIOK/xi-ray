@@ -17,9 +17,22 @@ sysctl -w net.ipv4.ip_forward=1 >/dev/null
 sysctl -w net.ipv4.conf.all.rp_filter=0 >/dev/null
 sysctl -w net.ipv4.conf.default.rp_filter=0 >/dev/null
 
+attach_bridge_carrier() {
+  br="$1"
+  dummy="dummy-${br}"
+  if ! ip link show "$dummy" >/dev/null 2>&1; then
+    ip link add "$dummy" type dummy
+  fi
+  if ! ip link show "$dummy" 2>/dev/null | grep -q "master $br"; then
+    ip link set "$dummy" master "$br" 2>/dev/null || true
+  fi
+  ip link set "$dummy" up 2>/dev/null || true
+}
+
 for br in br-lan br-guest; do
   ip link show "$br" >/dev/null 2>&1 || ip link add "$br" type bridge
   ip link set "$br" up
+  attach_bridge_carrier "$br"
 done
 
 ip addr show br-lan | grep -q '192.168.31.1/' || ip addr add 192.168.31.1/24 dev br-lan

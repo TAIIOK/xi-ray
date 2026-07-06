@@ -1,5 +1,6 @@
 .PHONY: build build-arm64 test tidy run install uninstall uninstall-yes install-autostart release-bundle tag-release deploy \
-	lab-up lab-down lab-purge lab-shell lab-status lab-guest-test lab-routing-test lab-routing-e2e-test lab-reset-password lab-deploy lab-deploy-full lab-update-test
+	lab-up lab-down lab-purge lab-shell lab-status lab-guest-test lab-routing-test lab-routing-e2e-test lab-reset-password lab-deploy lab-deploy-full lab-update-test \
+	qemu-up qemu-down qemu-purge qemu-shell qemu-status qemu-deploy qemu-deploy-full qemu-guest-test qemu-repair qemu-update-test
 
 export GOTOOLCHAIN ?= go1.22.10
 
@@ -86,3 +87,33 @@ lab-deploy-full:
 
 lab-update-test:
 	sh lab/scripts/lab-update-test.sh
+
+qemu-up:
+	sh lab/qemu/qemu-up.sh
+
+qemu-down:
+	sh lab/qemu/qemu-down.sh
+
+qemu-purge:
+	sh lab/qemu/qemu-purge.sh
+
+qemu-shell:
+	sh lab/qemu/qemu-shell.sh
+
+qemu-status:
+	sh lab/qemu/qemu-status.sh
+
+qemu-deploy:
+	sh lab/qemu/qemu-deploy.sh
+
+qemu-deploy-full:
+	sh lab/qemu/qemu-deploy.sh --full --reset
+
+qemu-guest-test:
+	sh lab/qemu/qemu-guest-test.sh
+
+qemu-repair:
+	sh lab/qemu/qemu-repair.sh
+
+qemu-update-test:
+	sh lab/qemu/qemu-update-test.sh

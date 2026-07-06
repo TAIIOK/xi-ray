@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-06
+
+### Added
+
+- **QEMU OpenWrt lab** (`lab/qemu/`): `make qemu-up`, `qemu-deploy`, `qemu-deploy-full`, `qemu-repair`, `qemu-guest-test`, `qemu-update-test` — procd/cron environment closer to BE7000 than Multipass
+- Offline opkg bundle install for QEMU (host-side `.ipk` extract; fixes 0-byte stubs for `curl`, `ip`, `ca-bundle`)
+- `internal/httpclient` — explicit CA bundle paths for HTTPS on OpenWrt (`/etc/ssl/certs/ca-certificates.crt`)
+- `make qemu-update-test` — E2E panel apply + rollback on OpenWrt via `panel-updater.sh` (procd, no systemd)
+- Guest bridge carrier via dummy interface in Multipass `lab/network-setup.sh`
+
+### Fixed
+
+- **`startup_xray_guest.sh`**: BusyBox ash `if ! cmd &` always entered fail-open branch — false «failed to launch xray» loop with procd respawn
+- Startup script lock prevents concurrent `startup_xray_guest.sh` runs; launch check uses `pidof` only
+- Guest network detection treats bridge `UNKNOWN` + IP as up (QEMU `br-guest` without Wi‑Fi port)
+- Subscription fetch TLS on OpenWrt when system cert pool is empty
+- `install-autostart.sh` skips `cp` when source and destination are the same (BusyBox)
+- Panel procd init sets `SSL_CERT_FILE` for HTTPS client
+- QEMU staging upload uses tar stream (fixes `opkg-root/etc: not a regular file` on deploy-full)
+- QEMU provision restores `ca-bundle` after failed `opkg --force-reinstall` (chicken-and-egg SSL)
+
+### Changed
+
+- `lab/README.md`, `docs/development.md` — QEMU lab documentation
+
 ## [0.3.6] - 2026-07-06
 
 ### Fixed

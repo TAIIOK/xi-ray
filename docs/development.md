@@ -103,3 +103,18 @@ make lab-purge       # удалить VM
 ```
 
 Подробнее: [lab/README.md](../lab/README.md)
+
+## QEMU OpenWrt lab
+
+Ближе к BE7000: procd, cron, `/etc/init.d`, USB-диск — для регрессий update/autostart:
+
+```bash
+brew install qemu    # один раз
+make qemu-up
+make qemu-status
+make qemu-guest-test
+make qemu-deploy     # обновить panel
+make qemu-down
+```
+
+Подробнее: [lab/qemu/README.md](../lab/qemu/README.md)

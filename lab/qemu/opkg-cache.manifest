@@ -1,0 +1,13 @@
+# Pinned aarch64_generic packages for QEMU lab offline install (OpenWrt 24.10.0).
+# ca-bundle first — without it HTTPS opkg/curl health probe fails (0-byte rootfs stubs).
+https://downloads.openwrt.org/releases/24.10.0/packages/aarch64_generic/base/ca-bundle_20260223-r1_all.ipk
+https://downloads.openwrt.org/releases/24.10.0/packages/aarch64_generic/base/zlib_1.3.1-r1_aarch64_generic.ipk
+https://downloads.openwrt.org/releases/24.10.0/packages/aarch64_generic/base/libbpf1_1.5.0-r1_aarch64_generic.ipk
+https://downloads.openwrt.org/releases/24.10.0/packages/aarch64_generic/base/libelf1_0.192-r1_aarch64_generic.ipk
+https://downloads.openwrt.org/releases/24.10.0/packages/aarch64_generic/base/libmnl0_1.0.5-r1_aarch64_generic.ipk
+https://downloads.openwrt.org/releases/24.10.0/packages/aarch64_generic/base/libnl-tiny1_2025.03.19~c0df580a-r1_aarch64_generic.ipk
+https://downloads.openwrt.org/releases/24.10.0/packages/aarch64_generic/base/ip-full_6.11.0-r1_aarch64_generic.ipk
+https://downloads.openwrt.org/releases/24.10.0/packages/aarch64_generic/base/libmbedtls21_3.6.6-r2_aarch64_generic.ipk
+https://downloads.openwrt.org/releases/24.10.0/packages/aarch64_generic/packages/libnghttp2-14_1.63.0-r1_aarch64_generic.ipk
+https://downloads.openwrt.org/releases/24.10.0/packages/aarch64_generic/packages/libcurl4_8.19.0-r2_aarch64_generic.ipk
+https://downloads.openwrt.org/releases/24.10.0/packages/aarch64_generic/packages/curl_8.19.0-r2_aarch64_generic.ipk

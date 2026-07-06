@@ -10,6 +10,7 @@ start_service() {
   CONFIG="$(ls /mnt/usb-*/xiaomi-vless/panel.json 2>/dev/null | head -1)"
   [ -x "$PANEL" ] || return 1
   procd_open_instance
+  procd_set_param env SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
   procd_set_param command /bin/sh
   procd_append_param command -c
   procd_append_param command "$PANEL -config $CONFIG -listen 0.0.0.0:7777 >> $(dirname "$PANEL")/panel.log 2>&1 &"

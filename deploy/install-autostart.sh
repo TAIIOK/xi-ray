@@ -80,8 +80,10 @@ install_failopen_guard() {
       mkdir -p "$(dirname "$GUARD_SCRIPT")"
       cp -f "$candidate" "$GUARD_SCRIPT"
       chmod +x "$GUARD_SCRIPT"
-      cp -f "$candidate" "${INSTALL_DIR}/xiaomi-vless-failopen-guard.sh"
-      chmod +x "${INSTALL_DIR}/xiaomi-vless-failopen-guard.sh"
+      if [ "$candidate" != "${INSTALL_DIR}/xiaomi-vless-failopen-guard.sh" ]; then
+        cp -f "$candidate" "${INSTALL_DIR}/xiaomi-vless-failopen-guard.sh"
+        chmod +x "${INSTALL_DIR}/xiaomi-vless-failopen-guard.sh"
+      fi
       log "fail-open guard installed: $GUARD_SCRIPT"
       return 0
     fi
@@ -96,7 +98,9 @@ install_iptables_cron_wrapper() {
     "${INSTALL_DIR}/xray-guest-iptables-cron.sh" \
     "${script_dir}/xray-guest-iptables-cron.sh"; do
     if [ -f "$candidate" ]; then
-      cp -f "$candidate" "$IPTABLES_CRON"
+      if [ "$candidate" != "$IPTABLES_CRON" ]; then
+        cp -f "$candidate" "$IPTABLES_CRON"
+      fi
       chmod +x "$IPTABLES_CRON"
       log "iptables cron wrapper installed: $IPTABLES_CRON"
       return 0

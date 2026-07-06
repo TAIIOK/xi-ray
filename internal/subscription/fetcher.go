@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/taiiok/xiaomi-vless/internal/config"
+	"github.com/taiiok/xiaomi-vless/internal/httpclient"
 )
 
 type Fetcher struct {
@@ -16,7 +17,7 @@ type Fetcher struct {
 
 func NewFetcher() *Fetcher {
 	return &Fetcher{
-		client: &http.Client{Timeout: 30 * time.Second},
+		client: httpclient.Default(30 * time.Second),
 	}
 }
 

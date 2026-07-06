@@ -178,7 +178,7 @@ func parseBriefAddrs(output string) (guest, lan bridgeAddr) {
 		}
 		name := parts[0]
 		state := parts[1]
-		ba := bridgeAddr{name: name, up: strings.EqualFold(state, "UP") || strings.Contains(strings.ToUpper(state), "UP")}
+		ba := bridgeAddr{name: name, up: linkLooksUp(state)}
 		for _, f := range parts[2:] {
 			if !strings.Contains(f, ".") || strings.Contains(f, ":") {
 				continue
@@ -198,6 +198,15 @@ func parseBriefAddrs(output string) (guest, lan bridgeAddr) {
 		}
 	}
 	return guest, lan
+}
+
+func linkLooksUp(state string) bool {
+	u := strings.ToUpper(strings.TrimSpace(state))
+	if u == "DOWN" {
+		return false
+	}
+	// Linux bridges without a carrier report UNKNOWN even when configured (common in QEMU lab).
+	return strings.Contains(u, "UP") || u == "UNKNOWN"
 }
 
 func parseIPv4CIDR(s string) (ip, network string, ok bool) {
