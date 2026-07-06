@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-07-06
+
+### Fixed
+
+- `panel-updater.sh` no longer aborts apply when `systemctl start` is slow (`set -e` + 10s timeout); waits up to 30s for HTTP readiness
+- Panel startup no longer spawns competing `panel-updater resume` during `restarting` phase (race that could leave panel down)
+- Rollback enabled for `dev` builds when `panel.previous` exists (same version label no longer hides rollback)
+
 ## [0.3.5] - 2026-07-06
 
 ### Added
@@ -85,6 +93,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Embedded version via `-version` flag
 - Release `install.sh` and `scripts/quick-install.sh` for one-command setup
 
+[0.3.6]: https://github.com/TAIIOK/xi-ray/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/TAIIOK/xi-ray/compare/v0.3.3...v0.3.5
 [0.3.3]: https://github.com/TAIIOK/xi-ray/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/TAIIOK/xi-ray/compare/v0.3.0...v0.3.2

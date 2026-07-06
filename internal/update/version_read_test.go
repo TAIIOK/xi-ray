@@ -21,3 +21,15 @@ func TestSameVersionLabel(t *testing.T) {
 		t.Fatal("expected different")
 	}
 }
+
+func TestCanRollbackToPreviousDevBuild(t *testing.T) {
+	if !canRollbackToPrevious("dev", "dev") {
+		t.Fatal("dev build should allow rollback when panel.previous exists")
+	}
+	if canRollbackToPrevious("0.3.5", "0.3.5") {
+		t.Fatal("same release labels should not rollback")
+	}
+	if !canRollbackToPrevious("0.3.5", "0.3.4") {
+		t.Fatal("older previous should allow rollback")
+	}
+}

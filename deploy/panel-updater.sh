@@ -75,21 +75,28 @@ restart_panel() {
     if systemctl cat xiaomi-vless-panel.service >/dev/null 2>&1; then
       systemctl stop xiaomi-vless-panel.service 2>/dev/null || true
       sleep 1
-      # Drop orphan panel processes left by legacy killall/nohup restarts.
       if killall -0 panel 2>/dev/null; then
         killall panel 2>/dev/null || true
         sleep 1
       fi
-      systemctl start xiaomi-vless-panel.service 2>/dev/null || true
+      if ! systemctl start xiaomi-vless-panel.service 2>/dev/null; then
+        log "WARN: systemctl start xiaomi-vless-panel.service failed"
+      fi
       i=0
-      while [ "$i" -lt 10 ]; do
+      while [ "$i" -lt 30 ]; do
         if systemctl is-active --quiet xiaomi-vless-panel.service 2>/dev/null; then
-          return 0
+          if command -v curl >/dev/null 2>&1; then
+            if curl -fsS --connect-timeout 2 http://127.0.0.1:7777/login >/dev/null 2>&1; then
+              return 0
+            fi
+          else
+            return 0
+          fi
         fi
         i=$((i + 1))
         sleep 1
       done
-      log "ERROR: xiaomi-vless-panel.service did not become active"
+      log "ERROR: xiaomi-vless-panel.service did not become ready"
       return 1
     fi
   fi
@@ -207,8 +214,11 @@ do_apply() {
   install_flash_hooks
   run_post_update
   write_phase restarting
-  restart_panel
-  log "panel restarted — health check will run on startup"
+  if restart_panel; then
+    log "panel restarted — health check will run on startup"
+  else
+    log "WARN: panel service not ready — run: systemctl start xiaomi-vless-panel.service"
+  fi
 }
 
 do_rollback() {
@@ -230,8 +240,13 @@ do_resume() {
       do_apply
       ;;
     restarting)
-      restart_panel
-      write_phase health_check
+      if systemctl is-active --quiet xiaomi-vless-panel.service 2>/dev/null; then
+        write_phase health_check
+        log "panel already running — defer to startup health check"
+      else
+        restart_panel || log "WARN: resume restart failed"
+        write_phase health_check
+      fi
       ;;
     health_check)
       restart_panel

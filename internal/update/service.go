@@ -92,11 +92,11 @@ func (s *Service) Status(ctx context.Context) (StatusResponse, error) {
 		if v := s.layout.PreviousPanelVersion(); v != "" {
 			resp.RollbackVersion = v
 			resp.PreviousVersion = v
-			resp.CanRollback = !SameVersionLabel(v, version.Version)
+			resp.CanRollback = canRollbackToPrevious(version.Version, v)
 		} else if st.PreviousVersion != "" {
 			resp.PreviousVersion = st.PreviousVersion
 			resp.RollbackVersion = st.PreviousVersion
-			resp.CanRollback = !SameVersionLabel(st.PreviousVersion, version.Version)
+			resp.CanRollback = canRollbackToPrevious(version.Version, st.PreviousVersion)
 		} else {
 			resp.PreviousVersion = "previous"
 			resp.RollbackVersion = "previous"
@@ -360,7 +360,7 @@ func (s *Service) ResumeOrVerify(ctx context.Context) error {
 		return err
 	case PhaseExtracting:
 		return s.resumeExtracting(ctx)
-	case PhaseVerified, PhaseApplying, PhaseRestarting:
+	case PhaseVerified, PhaseApplying:
 		if s.layout.UpdaterReady() {
 			go func() {
 				if err := s.spawnUpdaterScript("resume"); err != nil {
@@ -369,8 +369,9 @@ func (s *Service) ResumeOrVerify(ctx context.Context) error {
 			}()
 		}
 		return nil
-	case PhaseHealthCheck:
-		return s.runHealthCheck(ctx)
+	case PhaseRestarting, PhaseHealthCheck:
+		// Startup health check handles these; avoid racing panel-updater resume.
+		return nil
 	case PhaseFailed:
 		return nil
 	case PhaseChecking:
@@ -430,6 +431,18 @@ func (s *Service) StartHealthCheckIfNeeded(ctx context.Context) {
 	case PhaseHealthCheck:
 		go s.runPostUpdateAndHealthCheck()
 	}
+}
+
+func canRollbackToPrevious(current, previous string) bool {
+	if strings.TrimSpace(previous) == "" {
+		return true
+	}
+	cur := normalizeVersionLabel(current)
+	prev := normalizeVersionLabel(previous)
+	if cur == "dev" || prev == "dev" {
+		return true
+	}
+	return !SameVersionLabel(previous, current)
 }
 
 func (s *Service) runPostUpdateAndHealthCheck() {
